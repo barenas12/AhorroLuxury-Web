@@ -61,11 +61,13 @@ const resetInactivityTimer = (): void => {
 };
 
 // Cierre automático por superar los 30 min
+// Cierre automático por superar los 30 min
 const handleInactivityTimeout = (): void => {
   if (currentUser.value) {
     currentUser.value = null;
     localStorage.removeItem(STORAGE_USER_KEY);
     localStorage.removeItem(STORAGE_TIME_KEY);
+    localStorage.removeItem('token'); // <-- ELIMINAR EL TOKEN JWT
     if (inactivityTimer) clearTimeout(inactivityTimer);
 
     currentView.value = "home";
@@ -79,6 +81,7 @@ const handleManualLogout = (): void => {
   currentUser.value = null;
   localStorage.removeItem(STORAGE_USER_KEY);
   localStorage.removeItem(STORAGE_TIME_KEY);
+  localStorage.removeItem('token'); // <-- ELIMINAR EL TOKEN JWT
   if (inactivityTimer) clearTimeout(inactivityTimer);
 
   currentView.value = "home";

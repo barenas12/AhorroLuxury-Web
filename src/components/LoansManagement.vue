@@ -1,5 +1,6 @@
 <script setup lang="ts">
-import { ref, computed, onMounted, watch } from 'vue'
+import { ref, computed, onMounted, nextTick, watch } from 'vue'
+import LoanReceipt, { type LoanReceiptData } from './LoanReceipt.vue'
 
 export interface LoanRecord {
   id: number
@@ -21,6 +22,9 @@ export interface LoanRecord {
   registeredByName: string
 }
 
+type LoanSortKey = 'id' | 'partner' | 'capital' | 'remainingCapital' | 'interestRate' | 'paidInterest' | 'guarantee' | 'dueDate' | 'registeredBy' | 'status'
+type SortDirection = 'asc' | 'desc'
+
 const props = defineProps<{
   currentUser: { id: number, name?: string, user?: string, username?: string }
 }>()
@@ -30,6 +34,8 @@ const partners = ref<{ id: number, fullName: string, documentId: string }[]>([])
 const isLoading = ref(false)
 const searchQuery = ref('')
 const statusFilter = ref<'Activo' | 'Pagado' | 'Todos'>('Activo')
+const sortKey = ref<LoanSortKey>('id')
+const sortDirection = ref<SortDirection>('desc')
 
 // Modales
 const showCreateModal = ref(false)
@@ -38,6 +44,8 @@ const isSaving = ref(false)
 const modalError = ref('')
 
 const selectedLoan = ref<LoanRecord | null>(null)
+const loanReceiptRef = ref<InstanceType<typeof LoanReceipt> | null>(null)
+const loanReceiptData = ref<LoanReceiptData | null>(null)
 
 // Función para calcular la fecha sumando días
 const calculateDueDate = (startDateStr: string, daysToAdd: number): string => {
@@ -118,8 +126,44 @@ const filteredLoans = computed(() => {
   if (q) {
     list = list.filter(l => l.partnerName.toLowerCase().includes(q) || l.documentId.includes(q))
   }
-  return list
+  return [...list].sort((a, b) => {
+    const first = getLoanSortValue(a, sortKey.value)
+    const second = getLoanSortValue(b, sortKey.value)
+    const comparison = typeof first === 'number' && typeof second === 'number'
+      ? first - second
+      : String(first).localeCompare(String(second), 'es', { numeric: true, sensitivity: 'base' })
+    return sortDirection.value === 'asc' ? comparison : -comparison
+  })
 })
+
+const getLoanSortValue = (loan: LoanRecord, key: LoanSortKey): number | string => {
+  switch (key) {
+    case 'id': return Number(loan.id)
+    case 'partner': return loan.partnerName
+    case 'capital': return Number(loan.initialCapital)
+    case 'remainingCapital': return Number(loan.initialCapital) - Number(loan.paidCapital)
+    case 'interestRate': return Number(loan.interestRate)
+    case 'paidInterest': return Number(loan.paidInterest)
+    case 'guarantee': return loan.guarantee
+    case 'dueDate': return formatDate(loan.dueDate)
+    case 'registeredBy': return loan.registeredByName
+    case 'status': return loan.status
+  }
+}
+
+const toggleLoanSort = (key: LoanSortKey): void => {
+  if (sortKey.value === key) {
+    sortDirection.value = sortDirection.value === 'asc' ? 'desc' : 'asc'
+    return
+  }
+  sortKey.value = key
+  sortDirection.value = 'asc'
+}
+
+const loanSortIndicator = (key: LoanSortKey): string => {
+  if (sortKey.value !== key) return ''
+  return sortDirection.value === 'asc' ? ' ▲' : ' ▼'
+}
 
 // Métricas
 const totalCapitalPrestado = computed(() => loans.value.reduce((acc, l) => acc + Number(l.initialCapital), 0))
@@ -128,6 +172,28 @@ const totalGananciaNeta = computed(() => loans.value.reduce((acc, l) => acc + Nu
 
 const formatCurrency = (val: number) => {
   return new Intl.NumberFormat('es-CO', { style: 'currency', currency: 'COP', maximumFractionDigits: 0 }).format(val)
+}
+
+const expectedInterest = (loan: Pick<LoanRecord, 'initialCapital' | 'interestRate' | 'installments'>): number =>
+  Number(loan.initialCapital) * (Number(loan.interestRate) / 100) * Number(loan.installments)
+
+const getDaysLate = (dueDate: string, referenceDate = today): number => {
+  const due = Date.parse(`${formatDate(dueDate)}T00:00:00Z`)
+  const reference = Date.parse(`${formatDate(referenceDate)}T00:00:00Z`)
+  if (Number.isNaN(due) || Number.isNaN(reference)) return 0
+  return Math.max(0, Math.floor((reference - due) / 86400000))
+}
+
+const downloadLoanReceipt = async (data: LoanReceiptData): Promise<void> => {
+  loanReceiptData.value = data
+  await nextTick()
+  try {
+    if (!loanReceiptRef.value) throw new Error('No se pudo preparar el comprobante.')
+    await loanReceiptRef.value.downloadPDF()
+  } catch (error) {
+    console.error('Error al generar el comprobante del préstamo:', error)
+    window.alert('La operación se guardó, pero no se pudo generar el PDF. Inténtalo de nuevo.')
+  }
 }
 
 // Lógica Formulario de Creación
@@ -191,9 +257,47 @@ const submitNewLoan = async () => {
     
     const loanData = await loanRes.json()
     if (!loanRes.ok || !loanData.success) throw new Error(loanData.message)
-    
+    const loanId = Number(loanData.id)
+    if (!Number.isFinite(loanId) || loanId <= 0) {
+      throw new Error('El préstamo se guardó, pero no se recibió su número de comprobante.')
+    }
+
+    const loan = {
+      initialCapital: Number(newLoanForm.value.initialCapital),
+      interestRate: Number(newLoanForm.value.interestRate),
+      installments: Number(newLoanForm.value.installments)
+    }
+    const interest = expectedInterest(loan)
+    const partnerName = partner?.fullName || 'Socio'
+    const receiptData: LoanReceiptData = {
+      id: String(loanId),
+      partnerName,
+      documentId: partner?.documentId || '',
+      deliveryMethod: newLoanForm.value.deliveryMethod,
+      capital: loan.initialCapital,
+      guarantee: newLoanForm.value.guarantee,
+      interestRate: loan.interestRate,
+      deliveryDate: newLoanForm.value.deliveryDate,
+      installments: loan.installments,
+      dueDate: newLoanForm.value.dueDate,
+      daysLate: getDaysLate(newLoanForm.value.dueDate),
+      interestPayment: 0,
+      remainingInterest: interest,
+      capitalPayment: 0,
+      remainingCapital: loan.initialCapital,
+      totalPayments: 0,
+      totalRemaining: loan.initialCapital + interest,
+      status: 'Activo',
+      adjustment: 'No',
+      adjustmentValue: 0,
+      description: newLoanForm.value.observations,
+      registeredBy: props.currentUser.name || props.currentUser.user || props.currentUser.username || 'Administrador',
+      receiptType: 'loan'
+    }
+
     showCreateModal.value = false
     await loadData()
+    await downloadLoanReceipt(receiptData)
   } catch (err: any) {
     modalError.value = err.message // Aquí mostrará "¡Fondos insuficientes!"
   } finally {
@@ -251,8 +355,44 @@ const submitMixedPayment = async () => {
     })
     const data = await res.json()
     if (!res.ok || !data.success) throw new Error(data.message)
+    if (!Array.isArray(data.paymentIds) || data.paymentIds.length === 0) {
+      throw new Error('El abono se guardó, pero el servidor no devolvió sus IDs.')
+    }
+
+    const loan = selectedLoan.value
+    const abonoCapital = totalAbonoCapitalDraft.value
+    const abonoInteres = totalAbonoInteresDraft.value
+    const capitalRestante = Math.max(0, remainingCapitalSelected.value - abonoCapital)
+    const interesRestante = Math.max(0, remainingInterestSelected.value - abonoInteres)
+    const receiptData: LoanReceiptData = {
+      id: data.paymentIds.map((id: number) => String(id)).join(', #'),
+      partnerName: loan.partnerName,
+      documentId: loan.documentId,
+      deliveryMethod: loan.deliveryMethod,
+      capital: Number(loan.initialCapital),
+      guarantee: loan.guarantee,
+      interestRate: Number(loan.interestRate),
+      deliveryDate: formatDate(loan.deliveryDate),
+      installments: Number(loan.installments),
+      dueDate: formatDate(loan.dueDate),
+      daysLate: getDaysLate(loan.dueDate, payForm.value.paymentDate),
+      interestPayment: abonoInteres,
+      remainingInterest: interesRestante,
+      capitalPayment: abonoCapital,
+      remainingCapital: capitalRestante,
+      totalPayments: abonoCapital + abonoInteres,
+      totalRemaining: capitalRestante + interesRestante,
+      status: capitalRestante === 0 ? 'Pagado' : loan.status,
+      adjustment: 'No',
+      adjustmentValue: 0,
+      description: payForm.value.observations,
+      registeredBy: props.currentUser.name || props.currentUser.user || props.currentUser.username || 'Administrador',
+      receiptType: 'payment'
+    }
+
     showPayModal.value = false
     await loadData()
+    await downloadLoanReceipt(receiptData)
   } catch (err: any) {
     modalError.value = err.message
   } finally {
@@ -311,24 +451,21 @@ onMounted(() => {
       <table>
         <thead>
           <tr>
-            <!-- Se eliminó el <th>ID</th> -->
-            <th>Socio</th>
-            <th>Capital Prestado</th>
-            <th>Capital Pendiente</th>
-            <th>Intereses (%)</th>
-            <th>Intereses Abonados</th>
-            <th>Garantía</th>
-            <th>Vencimiento</th>
-            <th>Responsable (Entregó)</th>
-            <th>Estado</th>
+            <th><button type="button" class="sort-header" @click="toggleLoanSort('partner')">Socio{{ loanSortIndicator('partner') }}</button></th>
+            <th><button type="button" class="sort-header" @click="toggleLoanSort('capital')">Capital Prestado{{ loanSortIndicator('capital') }}</button></th>
+            <th><button type="button" class="sort-header" @click="toggleLoanSort('remainingCapital')">Capital Pendiente{{ loanSortIndicator('remainingCapital') }}</button></th>
+            <th><button type="button" class="sort-header" @click="toggleLoanSort('interestRate')">Intereses (%){{ loanSortIndicator('interestRate') }}</button></th>
+            <th><button type="button" class="sort-header" @click="toggleLoanSort('paidInterest')">Intereses Abonados{{ loanSortIndicator('paidInterest') }}</button></th>
+            <th><button type="button" class="sort-header" @click="toggleLoanSort('guarantee')">Garantía{{ loanSortIndicator('guarantee') }}</button></th>
+            <th><button type="button" class="sort-header" @click="toggleLoanSort('dueDate')">Vencimiento{{ loanSortIndicator('dueDate') }}</button></th>
+            <th><button type="button" class="sort-header" @click="toggleLoanSort('registeredBy')">Responsable (Entregó){{ loanSortIndicator('registeredBy') }}</button></th>
+            <th><button type="button" class="sort-header" @click="toggleLoanSort('status')">Estado{{ loanSortIndicator('status') }}</button></th>
             <th>Acciones</th>
           </tr>
         </thead>
         <tbody>
-          <!-- Se ajustó el colspan a 10 -->
           <tr v-if="isLoading"><td colspan="10" class="center-text">Cargando...</td></tr>
           <tr v-for="l in filteredLoans" :key="l.id">
-            <!-- Se eliminó el <td>#{{ l.id }}</td> -->
             <td><strong>{{ l.partnerName }}</strong><small class="sub-text">C.C. {{ l.documentId }}</small></td>
             <td class="money-text">{{ formatCurrency(Number(l.initialCapital)) }}</td>
             <td class="money-text debt-text">{{ formatCurrency(Number(l.initialCapital) - Number(l.paidCapital)) }}</td>
@@ -499,6 +636,8 @@ onMounted(() => {
         </form>
       </div>
     </div>
+
+    <LoanReceipt ref="loanReceiptRef" :receiptData="loanReceiptData" />
   </div>
 </template>
 
@@ -532,6 +671,7 @@ onMounted(() => {
 table { width: 100%; border-collapse: collapse; text-align: left; }
 th, td { padding: 0.95rem 1.1rem; border-bottom: 1px solid var(--color-border); }
 th { background-color: var(--color-bg-light); color: var(--color-primary); font-size: 0.85rem; text-transform: uppercase; }
+.sort-header { padding: 0; border: 0; background: transparent; color: inherit; font: inherit; text-align: left; text-transform: inherit; cursor: pointer; white-space: nowrap; }
 .money-text { font-weight: 600; }
 .debt-text { color: #c53030; }
 .profit-text { color: var(--color-secondary); }

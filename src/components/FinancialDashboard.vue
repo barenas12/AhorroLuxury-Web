@@ -125,7 +125,7 @@ onMounted(() => {
         <strong class="kpi-value">{{ formatCurrency(patrimonioTotal) }}</strong>
         <div class="kpi-breakdown">
           <span>Liquidez: {{ formatCurrency(totalDineroLiquido) }}</span>
-          <span>En Calle: {{ formatCurrency(capitalEnCalle) }}</span>
+          <span>Préstamos: {{ formatCurrency(capitalEnCalle) }}</span>
         </div>
       </div>
       <div class="kpi-card profit-card">

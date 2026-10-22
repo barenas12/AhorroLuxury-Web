@@ -247,17 +247,19 @@ const submitUser = async () => {
 const toggleStatus = async (user: PartnerUser) => {
   const newStatus = user.partnerStatus === 1 ? 0 : 1
   try {
-    const res = await fetch(`http://localhost:3000/api/users/status/${user.documentId}`, {
+    const res = await fetch('http://localhost:3000/api/users/status', {
       method: 'PATCH',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ status: newStatus })
+      body: JSON.stringify({ documentId: user.documentId, status: newStatus })
     })
     const data = await res.json()
-    if (data.success) {
-      user.partnerStatus = newStatus
+    if (!res.ok || !data.success) {
+      throw new Error(data.message || 'No se pudo cambiar el estado del socio.')
     }
+
+    user.partnerStatus = newStatus
   } catch (err) {
-    console.error('Error al cambiar estado:', err)
+    alert(err instanceof Error ? err.message : 'Error al cambiar el estado del socio.')
   }
 }
 

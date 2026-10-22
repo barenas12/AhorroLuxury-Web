@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { ref, computed, onMounted, nextTick } from 'vue'
+import ReceiptTicket, { type TicketData } from './ReceiptTicket.vue'
 
 export interface PaymentRecord {
   id: number
@@ -39,6 +40,9 @@ export interface PaymentRowItem {
   fineAmount: number
 }
 
+type PaymentSortKey = 'id' | 'partner' | 'concept' | 'method' | 'amount' | 'fine' | 'total' | 'paymentDate' | 'registeredBy' | 'createdAt'
+type SortDirection = 'asc' | 'desc'
+
 const props = defineProps<{
   currentUser: {
     id: number
@@ -52,11 +56,17 @@ const payments = ref<PaymentRecord[]>([])
 const partners = ref<PartnerOption[]>([])
 const searchQuery = ref('')
 const methodFilter = ref<string>('todos')
+const sortKey = ref<PaymentSortKey>('id')
+const sortDirection = ref<SortDirection>('desc')
 const isLoading = ref(false)
 const showModal = ref(false)
 const isSaving = ref(false)
 const modalError = ref('')
 const itemsListRef = ref<HTMLElement | null>(null)
+
+// Referencia al componente y datos del recibo PDF
+const receiptRef = ref<InstanceType<typeof ReceiptTicket> | null>(null)
+const currentTicketData = ref<TicketData | null>(null)
 
 const conceptsList = [
   'Abono Ahorro',
@@ -233,8 +243,44 @@ const filteredPayments = computed(() => {
       p.registeredByName.toLowerCase().includes(q)
     )
   }
-  return list
+  return [...list].sort((a, b) => {
+    const first = getPaymentSortValue(a, sortKey.value)
+    const second = getPaymentSortValue(b, sortKey.value)
+    const comparison = typeof first === 'number' && typeof second === 'number'
+      ? first - second
+      : String(first).localeCompare(String(second), 'es', { numeric: true, sensitivity: 'base' })
+    return sortDirection.value === 'asc' ? comparison : -comparison
+  })
 })
+
+const getPaymentSortValue = (payment: PaymentRecord, key: PaymentSortKey): number | string => {
+  switch (key) {
+    case 'id': return Number(payment.id)
+    case 'partner': return payment.partnerName
+    case 'concept': return `${payment.concept} ${payment.ticketNumber || ''}`
+    case 'method': return payment.paymentMethod
+    case 'amount': return Number(payment.amount)
+    case 'fine': return Number(payment.fineAmount)
+    case 'total': return Number(payment.totalPaid)
+    case 'paymentDate': return payment.paymentDate
+    case 'registeredBy': return payment.registeredByName
+    case 'createdAt': return payment.createdAt
+  }
+}
+
+const togglePaymentSort = (key: PaymentSortKey): void => {
+  if (sortKey.value === key) {
+    sortDirection.value = sortDirection.value === 'asc' ? 'desc' : 'asc'
+    return
+  }
+  sortKey.value = key
+  sortDirection.value = 'asc'
+}
+
+const paymentSortIndicator = (key: PaymentSortKey): string => {
+  if (sortKey.value !== key) return ''
+  return sortDirection.value === 'asc' ? ' ▲' : ' ▼'
+}
 
 const totalRecaudado = computed(() => {
   return filteredPayments.value.reduce((acc, p) => acc + Number(p.totalPaid), 0)
@@ -302,9 +348,36 @@ const submitPayment = async () => {
     if (!res.ok || !data.success) {
       throw new Error(data.message || 'Error al guardar los abonos.')
     }
+    if (!Array.isArray(data.paymentIds) || data.paymentIds.length === 0) {
+      throw new Error('Los pagos se guardaron, pero el servidor no devolvió sus IDs.')
+    }
+
+    const selectedPartner = partners.value.find(p => p.id === form.value.partnerId)
+    currentTicketData.value = {
+      id: data.paymentIds.map((id: number) => String(id)).join(', #'),
+      date: new Date().toLocaleDateString('es-CO'),
+      partnerName: selectedPartner ? selectedPartner.fullName : 'Socio',
+      documentId: selectedPartner ? selectedPartner.documentId : '',
+      totalAmount: totalModal.value,
+      registeredBy: props.currentUser.full_name || props.currentUser.name || 'Administrador',
+      items: form.value.items.map(item => ({
+        concept: item.concept === 'Pago Boleta' ? `Pago Boleta #${item.ticketNumber}` : item.concept,
+        amount: Number(item.amount) + (item.hasFine ? Number(item.fineAmount) : 0),
+        method: item.paymentMethod
+      }))
+    }
 
     showModal.value = false
     await loadData()
+    await nextTick()
+
+    try {
+      if (!receiptRef.value) throw new Error('No se pudo preparar el recibo.')
+      await receiptRef.value.downloadPDF()
+    } catch (error) {
+      console.error('Error al descargar el recibo:', error)
+      window.alert('El pago se guardó, pero no se pudo generar el PDF. Puedes volver a intentarlo.')
+    }
   } catch (err: any) {
     modalError.value = err.message
   } finally {
@@ -396,20 +469,20 @@ onMounted(() => {
       </div>
     </div>
 
-    <!-- Tabla (Sin columna ID) -->
+    <!-- Tabla -->
     <div class="table-container">
       <table>
         <thead>
           <tr>
-            <th>Socio</th>
-            <th>Concepto</th>
-            <th>Medio</th>
-            <th>Monto Abono</th>
-            <th>Mora / Multa</th>
-            <th>Total Recibido</th>
-            <th>Fecha Imputada</th>
-            <th>Registrado Por</th>
-            <th>Fecha Registro</th>
+            <th><button type="button" class="sort-header" @click="togglePaymentSort('partner')">Socio{{ paymentSortIndicator('partner') }}</button></th>
+            <th><button type="button" class="sort-header" @click="togglePaymentSort('concept')">Concepto{{ paymentSortIndicator('concept') }}</button></th>
+            <th><button type="button" class="sort-header" @click="togglePaymentSort('method')">Medio{{ paymentSortIndicator('method') }}</button></th>
+            <th><button type="button" class="sort-header" @click="togglePaymentSort('amount')">Monto Abono{{ paymentSortIndicator('amount') }}</button></th>
+            <th><button type="button" class="sort-header" @click="togglePaymentSort('fine')">Mora / Multa{{ paymentSortIndicator('fine') }}</button></th>
+            <th><button type="button" class="sort-header" @click="togglePaymentSort('total')">Total Recibido{{ paymentSortIndicator('total') }}</button></th>
+            <th><button type="button" class="sort-header" @click="togglePaymentSort('paymentDate')">Fecha Imputada{{ paymentSortIndicator('paymentDate') }}</button></th>
+            <th><button type="button" class="sort-header" @click="togglePaymentSort('registeredBy')">Registrado Por{{ paymentSortIndicator('registeredBy') }}</button></th>
+            <th><button type="button" class="sort-header" @click="togglePaymentSort('createdAt')">Fecha Registro{{ paymentSortIndicator('createdAt') }}</button></th>
           </tr>
         </thead>
         <tbody>
@@ -502,7 +575,7 @@ onMounted(() => {
                   </button>
                 </div>
 
-                <!-- Concepto y Monto (Selector de boleta condicional y exclusivo) -->
+                <!-- Concepto y Monto -->
                 <div class="item-grid-2">
                   <div class="field">
                     <label>Concepto *</label>
@@ -630,6 +703,10 @@ onMounted(() => {
         </form>
       </div>
     </div>
+
+    <!-- COMPONENTE INVISIBLE PARA GENERAR EL PDF -->
+    <ReceiptTicket ref="receiptRef" :ticketData="currentTicketData" />
+
   </div>
 </template>
 
@@ -812,6 +889,18 @@ th {
   text-transform: uppercase;
 }
 
+.sort-header {
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  text-transform: inherit;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
 .sub-text {
   display: block;
   font-size: 0.75rem;
@@ -889,10 +978,11 @@ th {
   inset: 0;
   background-color: rgba(8, 28, 45, 0.65);
   display: flex;
-  align-items: center;
+  align-items: flex-start;
   justify-content: center;
   z-index: 2000;
-  padding: 1.5rem;
+  padding: 2rem;
+  overflow-y: auto;
   backdrop-filter: blur(3px);
 }
 
@@ -902,8 +992,7 @@ th {
   width: 760px;
   max-width: 100%;
   padding: 2.2rem;
-  max-height: 92vh;
-  overflow-y: auto;
+  margin-bottom: 2rem;
 }
 
 .modal-top {

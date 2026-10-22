@@ -25,10 +25,15 @@ export interface PartnerSavings {
   generalTicketStatus: 'Al día' | 'En mora'
 }
 
+type SavingsSortKey = 'id' | 'partner' | 'frequency' | 'saved' | 'overdue' | 'savingsStatus' | 'nextDueDate' | 'daysRemaining' | 'ticketsStatus'
+type SortDirection = 'asc' | 'desc'
+
 const partners = ref<PartnerSavings[]>([])
 const isLoading = ref<boolean>(false)
 const searchQuery = ref<string>('')
 const statusFilter = ref<'todos' | 'al_dia' | 'en_mora'>('todos')
+const sortKey = ref<SavingsSortKey>('id')
+const sortDirection = ref<SortDirection>('desc')
 
 const loadSavingsData = async () => {
   isLoading.value = true
@@ -63,8 +68,43 @@ const filteredPartners = computed(() => {
     )
   }
 
-  return list
+  return [...list].sort((a, b) => {
+    const first = getSavingsSortValue(a, sortKey.value)
+    const second = getSavingsSortValue(b, sortKey.value)
+    const comparison = typeof first === 'number' && typeof second === 'number'
+      ? first - second
+      : String(first).localeCompare(String(second), 'es', { numeric: true, sensitivity: 'base' })
+    return sortDirection.value === 'asc' ? comparison : -comparison
+  })
 })
+
+const getSavingsSortValue = (partner: PartnerSavings, key: SavingsSortKey): number | string => {
+  switch (key) {
+    case 'id': return partner.id
+    case 'partner': return partner.fullName
+    case 'frequency': return partner.frequency
+    case 'saved': return partner.totalSavedCurrentPeriod
+    case 'overdue': return partner.overdueAmount
+    case 'savingsStatus': return partner.savingsStatus
+    case 'nextDueDate': return partner.nextDueDate
+    case 'daysRemaining': return partner.daysRemaining
+    case 'ticketsStatus': return partner.generalTicketStatus
+  }
+}
+
+const toggleSavingsSort = (key: SavingsSortKey): void => {
+  if (sortKey.value === key) {
+    sortDirection.value = sortDirection.value === 'asc' ? 'desc' : 'asc'
+    return
+  }
+  sortKey.value = key
+  sortDirection.value = 'asc'
+}
+
+const savingsSortIndicator = (key: SavingsSortKey): string => {
+  if (sortKey.value !== key) return ''
+  return sortDirection.value === 'asc' ? ' ▲' : ' ▼'
+}
 
 // Métricas
 const totalSocios = computed(() => partners.value.length)
@@ -156,14 +196,14 @@ onMounted(() => {
       <table>
         <thead>
           <tr>
-            <th>Socio</th>
-            <th>Frecuencia</th>
-            <th>Abonado (Neto)</th>
-            <th>Valor en Mora</th>
-            <th>Estado Ahorro</th>
-            <th>Fecha Límite</th>
-            <th>Días Restantes</th>
-            <th>Estado Boletas</th>
+            <th><button type="button" class="sort-header" @click="toggleSavingsSort('partner')">Socio{{ savingsSortIndicator('partner') }}</button></th>
+            <th><button type="button" class="sort-header" @click="toggleSavingsSort('frequency')">Frecuencia{{ savingsSortIndicator('frequency') }}</button></th>
+            <th><button type="button" class="sort-header" @click="toggleSavingsSort('saved')">Abonado (Neto){{ savingsSortIndicator('saved') }}</button></th>
+            <th><button type="button" class="sort-header" @click="toggleSavingsSort('overdue')">Valor en Mora{{ savingsSortIndicator('overdue') }}</button></th>
+            <th><button type="button" class="sort-header" @click="toggleSavingsSort('savingsStatus')">Estado Ahorro{{ savingsSortIndicator('savingsStatus') }}</button></th>
+            <th><button type="button" class="sort-header" @click="toggleSavingsSort('nextDueDate')">Fecha Límite{{ savingsSortIndicator('nextDueDate') }}</button></th>
+            <th><button type="button" class="sort-header" @click="toggleSavingsSort('daysRemaining')">Días Restantes{{ savingsSortIndicator('daysRemaining') }}</button></th>
+            <th><button type="button" class="sort-header" @click="toggleSavingsSort('ticketsStatus')">Estado Boletas{{ savingsSortIndicator('ticketsStatus') }}</button></th>
           </tr>
         </thead>
         <tbody>
@@ -386,6 +426,18 @@ th {
   font-weight: 700;
   font-size: 0.85rem;
   text-transform: uppercase;
+}
+
+.sort-header {
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  text-transform: inherit;
+  cursor: pointer;
+  white-space: nowrap;
 }
 
 .sub-text {

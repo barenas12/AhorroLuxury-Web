@@ -18,6 +18,9 @@ export interface Partner {
   partnerStatus: number
 }
 
+type EgressSortKey = 'paymentDate' | 'concept' | 'recipient' | 'amount' | 'paymentMethod' | 'registeredBy'
+type SortDirection = 'asc' | 'desc'
+
 const props = defineProps<{
   currentUser: { id: number, name?: string, username?: string }
 }>()
@@ -28,6 +31,8 @@ const isLoading = ref(false)
 const showModal = ref(false)
 const isSaving = ref(false)
 const modalError = ref('')
+const sortKey = ref<EgressSortKey>('paymentDate')
+const sortDirection = ref<SortDirection>('desc')
 
 const today = new Date().toISOString().substring(0, 10)
 
@@ -122,6 +127,40 @@ const formatCurrency = (val: number) => {
 
 const formatDate = (dateString: string) => dateString ? String(dateString).substring(0, 10) : ''
 
+const sortedEgresses = computed(() => [...egresses.value].sort((a, b) => {
+  const first = getEgressSortValue(a, sortKey.value)
+  const second = getEgressSortValue(b, sortKey.value)
+  const comparison = typeof first === 'number' && typeof second === 'number'
+    ? first - second
+    : String(first).localeCompare(String(second), 'es', { numeric: true, sensitivity: 'base' })
+  return sortDirection.value === 'asc' ? comparison : -comparison
+}))
+
+const getEgressSortValue = (egress: EgressRecord, key: EgressSortKey): number | string => {
+  switch (key) {
+    case 'paymentDate': return formatDate(egress.paymentDate)
+    case 'concept': return egress.concept
+    case 'recipient': return egress.recipient
+    case 'amount': return Number(egress.amount)
+    case 'paymentMethod': return egress.paymentMethod
+    case 'registeredBy': return egress.registeredByName
+  }
+}
+
+const toggleEgressSort = (key: EgressSortKey): void => {
+  if (sortKey.value === key) {
+    sortDirection.value = sortDirection.value === 'asc' ? 'desc' : 'asc'
+    return
+  }
+  sortKey.value = key
+  sortDirection.value = 'asc'
+}
+
+const egressSortIndicator = (key: EgressSortKey): string => {
+  if (sortKey.value !== key) return ''
+  return sortDirection.value === 'asc' ? ' ▲' : ' ▼'
+}
+
 onMounted(() => {
   loadData()
 })
@@ -144,20 +183,20 @@ onMounted(() => {
         <thead>
           <tr>
             <!-- Se eliminó el <th>ID</th> -->
-            <th>Fecha</th>
-            <th>Concepto</th>
-            <th>Beneficiario</th>
-            <th>Valor</th>
-            <th>Medio</th>
+            <th><button type="button" class="sort-header" @click="toggleEgressSort('paymentDate')">Fecha{{ egressSortIndicator('paymentDate') }}</button></th>
+            <th><button type="button" class="sort-header" @click="toggleEgressSort('concept')">Concepto{{ egressSortIndicator('concept') }}</button></th>
+            <th><button type="button" class="sort-header" @click="toggleEgressSort('recipient')">Beneficiario{{ egressSortIndicator('recipient') }}</button></th>
+            <th><button type="button" class="sort-header" @click="toggleEgressSort('amount')">Valor{{ egressSortIndicator('amount') }}</button></th>
+            <th><button type="button" class="sort-header" @click="toggleEgressSort('paymentMethod')">Medio{{ egressSortIndicator('paymentMethod') }}</button></th>
             <th>Observaciones</th>
-            <th>Registrado Por</th>
+            <th><button type="button" class="sort-header" @click="toggleEgressSort('registeredBy')">Registrado Por{{ egressSortIndicator('registeredBy') }}</button></th>
           </tr>
         </thead>
         <tbody>
           <!-- Se ajustó el colspan a 7 -->
           <tr v-if="isLoading"><td colspan="7" class="center-text">Cargando...</td></tr>
           <tr v-else-if="egresses.length === 0"><td colspan="7" class="center-text">No hay egresos registrados.</td></tr>
-          <tr v-for="e in egresses" :key="e.id">
+          <tr v-for="e in sortedEgresses" :key="e.id">
             <!-- Se eliminó el <td>#{{ e.id }}</td> -->
             <td>{{ formatDate(e.paymentDate) }}</td>
             <td><strong>{{ e.concept }}</strong></td>
@@ -274,6 +313,7 @@ onMounted(() => {
 table { width: 100%; border-collapse: collapse; text-align: left; }
 th, td { padding: 0.95rem 1.1rem; border-bottom: 1px solid var(--color-border); }
 th { background-color: var(--color-bg-light); color: var(--color-primary); font-size: 0.85rem; text-transform: uppercase; }
+.sort-header { padding: 0; border: 0; background: transparent; color: inherit; font: inherit; text-align: left; text-transform: inherit; cursor: pointer; white-space: nowrap; }
 .money-text { font-weight: 700; }
 .text-red { color: #e53e3e; }
 .center-text { text-align: center; color: var(--color-muted); padding: 2rem; }
