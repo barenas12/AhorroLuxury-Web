@@ -97,8 +97,8 @@ const loadData = async () => {
   isLoading.value = true
   try {
     const [resLoans, resPartners] = await Promise.all([
-      fetch('http://localhost:3000/api/loans'),
-      fetch('http://localhost:3000/api/payments/partners')
+      fetch(`${import.meta.env.VITE_API_URL}/api/loans`),
+      fetch(`${import.meta.env.VITE_API_URL}/api/payments/partners`)
     ])
     const dataLoans = await resLoans.json()
     const dataPartners = await resPartners.json()
@@ -236,7 +236,7 @@ const submitNewLoan = async () => {
       registeredBy: props.currentUser.id
     }
 
-    const egressRes = await fetch('http://localhost:3000/api/egresses', {
+    const egressRes = await fetch(`${import.meta.env.VITE_API_URL}/api/egresses`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(egressPayload)
@@ -249,7 +249,7 @@ const submitNewLoan = async () => {
 
     // 3. SI EL EGRESO FUE EXITOSO, SE CREA EL CONTRATO DEL PRÉSTAMO
     const loanPayload = { ...newLoanForm.value, registeredBy: props.currentUser.id }
-    const loanRes = await fetch('http://localhost:3000/api/loans', {
+    const loanRes = await fetch(`${import.meta.env.VITE_API_URL}/api/loans`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(loanPayload)
@@ -348,7 +348,7 @@ const submitMixedPayment = async () => {
   isSaving.value = true
   try {
     const payload = { ...payForm.value, registeredBy: props.currentUser.id }
-    const res = await fetch(`http://localhost:3000/api/loans/${selectedLoan.value.id}/pay`, {
+    const res = await fetch(`${import.meta.env.VITE_API_URL}/api/loans/${selectedLoan.value.id}/pay`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(payload)

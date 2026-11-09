@@ -38,7 +38,7 @@ const sortDirection = ref<SortDirection>('desc')
 const loadSavingsData = async () => {
   isLoading.value = true
   try {
-    const res = await fetch('http://localhost:3000/api/savings/dashboard')
+    const res = await fetch(`${import.meta.env.VITE_API_URL}/api/savings/dashboard`)
     const data = await res.json()
     if (data.success) {
       partners.value = data.data

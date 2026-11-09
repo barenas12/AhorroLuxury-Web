@@ -112,8 +112,8 @@ const loadData = async (): Promise<void> => {
   isLoading.value = true
   try {
     const [resPayments, resPartners] = await Promise.all([
-      fetch('http://localhost:3000/api/payments'),
-      fetch('http://localhost:3000/api/payments/partners')
+      fetch(`${import.meta.env.VITE_API_URL}/api/payments`),
+      fetch(`${import.meta.env.VITE_API_URL}/api/payments/partners`)
     ])
 
     const dataPayments = await resPayments.json()
@@ -338,7 +338,7 @@ const submitPayment = async () => {
       }))
     }
 
-    const res = await fetch('http://localhost:3000/api/payments', {
+    const res = await fetch(`${import.meta.env.VITE_API_URL}/api/payments`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(payload)

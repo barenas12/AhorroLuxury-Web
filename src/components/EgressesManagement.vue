@@ -56,8 +56,8 @@ const loadData = async () => {
   try {
     // Cargamos tanto los egresos como los usuarios al mismo tiempo
     const [resEgresses, resUsers] = await Promise.all([
-      fetch('http://localhost:3000/api/egresses'),
-      fetch('http://localhost:3000/api/users')
+      fetch(`${import.meta.env.VITE_API_URL}/api/egresses`),
+      fetch(`${import.meta.env.VITE_API_URL}/api/users`)
     ])
     
     const jsonEgresses = await resEgresses.json()
@@ -103,7 +103,7 @@ const submitEgress = async () => {
   isSaving.value = true
   try {
     const payload = { ...form.value, registeredBy: props.currentUser.id }
-    const res = await fetch('http://localhost:3000/api/egresses', {
+    const res = await fetch(`${import.meta.env.VITE_API_URL}/api/egresses`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(payload)

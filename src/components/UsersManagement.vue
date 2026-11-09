@@ -72,8 +72,8 @@ const loadData = async (): Promise<void> => {
   isLoading.value = true
   try {
     const [resUsers, resCoords] = await Promise.all([
-      fetch('http://localhost:3000/api/users'),
-      fetch('http://localhost:3000/api/users/coordinators')
+      fetch(`${import.meta.env.VITE_API_URL}/api/users`),
+      fetch(`${import.meta.env.VITE_API_URL}/api/users/coordinators`)
     ])
 
     const dataUsers = await resUsers.json()
@@ -219,8 +219,8 @@ const submitUser = async () => {
   isSaving.value = true
   try {
     const url = isEditing.value 
-      ? `http://localhost:3000/api/users/${form.value.id}` 
-      : 'http://localhost:3000/api/users'
+      ? `${import.meta.env.VITE_API_URL}/api/users/${form.value.id}` 
+      : `${import.meta.env.VITE_API_URL}/api/users`
     const method = isEditing.value ? 'PUT' : 'POST'
 
     const res = await fetch(url, {
@@ -247,7 +247,7 @@ const submitUser = async () => {
 const toggleStatus = async (user: PartnerUser) => {
   const newStatus = user.partnerStatus === 1 ? 0 : 1
   try {
-    const res = await fetch('http://localhost:3000/api/users/status', {
+    const res = await fetch(`${import.meta.env.VITE_API_URL}/api/users/status`, {
       method: 'PATCH',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ documentId: user.documentId, status: newStatus })
@@ -267,7 +267,7 @@ const toggleStatus = async (user: PartnerUser) => {
 const resetPassword = async (user: PartnerUser) => {
   if (!confirm(`¿Restablecer la contraseña de ${user.fullName} a su documento de identidad?`)) return
   try {
-    const res = await fetch(`http://localhost:3000/api/users/reset-password/${user.documentId}`, {
+    const res = await fetch(`${import.meta.env.VITE_API_URL}/api/users/reset-password/${user.documentId}`, {
       method: 'POST'
     })
     const data = await res.json()

@@ -26,7 +26,7 @@ const loadRaffleData = async () => {
   isLoading.value = true
   selectedNumber.value = null
   try {
-    const res = await fetch(`http://localhost:3000/api/users/raffle/${props.raffleType}`)
+    const res = await fetch(`${import.meta.env.VITE_API_URL}/api/users/raffle/${props.raffleType}`)
     const data = await res.json()
     if (data.success) {
       board.value = data.data

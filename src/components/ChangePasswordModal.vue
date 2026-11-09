@@ -59,7 +59,7 @@ const handleSubmit = async () => {
   errorMessage.value = ''
 
   try {
-    const res = await fetch('http://localhost:3000/api/users/change-password', {
+    const res = await fetch(`${import.meta.env.VITE_API_URL}/api/users/change-password`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({

@@ -29,7 +29,7 @@ const dashboardData = ref<DashboardData>({ recaudo: [], salidas: [], capitalPres
 const loadSummary = async () => {
   isLoading.value = true
   try {
-    const res = await fetch('http://localhost:3000/api/dashboard/summary')
+    const res = await fetch(`${import.meta.env.VITE_API_URL}/api/dashboard/summary`)
     const json = await res.json()
     if (json.success) {
       dashboardData.value = json.data
