@@ -26,7 +26,6 @@ const props = defineProps<{
 
 const isProfileThree = computed(() => Number(props.user.profile) === 3);
 
-// Propiedad unificada para pasar al módulo de pagos y préstamos
 const currentUserProps = computed(() => ({
   ...props.user,
   id: Number(props.user.id || 0)
