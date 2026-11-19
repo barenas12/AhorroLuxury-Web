@@ -8,8 +8,10 @@ export interface PartnerUser {
   lastName: string
   fullName: string
   savingsValue: number
+  quotaValue?: number
   frequency: number
-  cellphone: number
+  savingsStartDate?: string | null
+  cellphone: number | string
   coordinator: number
   coordinatorName: string
   partnerStatus: number
@@ -36,25 +38,37 @@ const isEditing = ref<boolean>(false)
 const isSaving = ref<boolean>(false)
 const modalError = ref<string>('')
 
+const today = new Date().toISOString().substring(0, 10)
+
 // Inputs reactivos para cada rifa en el modal
 const newTicket1Input = ref<string>('')
 const newTicket2Input = ref<string>('')
 
-// Formulario maestro (Aquí se agrega frequency: 8 por defecto)
 const form = ref({
   id: 0,
   documentId: '',
   name: '',
   lastName: '',
   savingsValue: 50000,
-  frequency: 8, // <-- CAMPO AÑADIDO
-  cellphone: 0,
+  frequency: 15,
+  savingsStartDate: today,
+  cellphone: '' as string | number,
   coordinator: 0,
   profile: 3,
   canLogin: true,
   ticket: [] as string[],
   ticket2: [] as string[]
 })
+
+const calculateQuota = (monthly: number, freq: number): number => {
+  const val = Number(monthly) || 0
+  const f = Number(freq) || 30
+  if (f === 15) return Math.round(val / 2)
+  if (f === 8) return Math.round(val / 4)
+  return Math.round(val)
+}
+
+const formCalculatedQuota = computed(() => calculateQuota(form.value.savingsValue, form.value.frequency))
 
 // Parsea boletas seguras desde JSON o string delimitado
 const parseTickets = (raw: string | string[] | undefined): string[] => {
@@ -174,9 +188,10 @@ const openCreateModal = () => {
     documentId: '',
     name: '',
     lastName: '',
-    savingsValue: 50000,
-    frequency: 8, // <-- Valor por defecto
-    cellphone: 0,
+    savingsValue: 100000,
+    frequency: 15,
+    savingsStartDate: today,
+    cellphone: '',
     coordinator: coordinators.value[0]?.id || 0,
     profile: 3,
     canLogin: true,
@@ -197,8 +212,9 @@ const openEditModal = (user: PartnerUser) => {
     name: user.name,
     lastName: user.lastName,
     savingsValue: Number(user.savingsValue),
-    frequency: Number(user.frequency) || 8, // <-- Asigna la frecuencia del usuario
-    cellphone: Number(user.cellphone),
+    frequency: Number(user.frequency) || 15,
+    savingsStartDate: user.savingsStartDate ? String(user.savingsStartDate).substring(0, 10) : '',
+    cellphone: user.cellphone ?? '',
     coordinator: user.coordinator,
     profile: Number(user.profile),
     canLogin: user.userLoginStatus === 1,
@@ -218,15 +234,18 @@ const submitUser = async () => {
 
   isSaving.value = true
   try {
-    const url = isEditing.value 
-      ? `${import.meta.env.VITE_API_URL}/api/users/${form.value.id}` 
+    const url = isEditing.value
+      ? `${import.meta.env.VITE_API_URL}/api/users/${form.value.id}`
       : `${import.meta.env.VITE_API_URL}/api/users`
     const method = isEditing.value ? 'PUT' : 'POST'
 
     const res = await fetch(url, {
       method,
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(form.value)
+      body: JSON.stringify({
+        ...form.value,
+        savingsStartDate: form.value.savingsStartDate || null
+      })
     })
 
     const data = await res.json()
@@ -267,12 +286,16 @@ const toggleStatus = async (user: PartnerUser) => {
 const resetPassword = async (user: PartnerUser) => {
   if (!confirm(`¿Restablecer la contraseña de ${user.fullName} a su documento de identidad?`)) return
   try {
-    const res = await fetch(`${import.meta.env.VITE_API_URL}/api/users/reset-password/${user.documentId}`, {
-      method: 'POST'
+    const res = await fetch(`${import.meta.env.VITE_API_URL}/api/users/reset-password`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ documentId: user.documentId })
     })
     const data = await res.json()
     if (data.success) {
       alert(`Contraseña de ${user.fullName} restablecida exitosamente.`)
+    } else {
+      alert(data.message || 'No se pudo restablecer la contraseña.')
     }
   } catch (err) {
     console.error('Error al restablecer contraseña:', err)
@@ -305,7 +328,7 @@ onMounted(() => {
     <div class="view-header">
       <div>
         <h2>Gestión de Socios & Usuarios</h2>
-        <p>Administración general, asignación de rifas y perfiles de acceso.</p>
+        <p>Administración general, asignación de rifas, fecha de inicio de ahorro y perfiles de acceso.</p>
       </div>
       <button type="button" class="btn-create" @click="openCreateModal">
         <span>+</span> Registrar Socio
@@ -332,29 +355,29 @@ onMounted(() => {
     <div class="filters-bar">
       <div class="search-box">
         <span class="search-icon">🔍</span>
-        <input 
-          type="text" 
-          v-model="searchQuery" 
-          placeholder="Buscar por nombre, cédula, boleta o coordinador..." 
+        <input
+          type="text"
+          v-model="searchQuery"
+          placeholder="Buscar por nombre, cédula, boleta o coordinador..."
         />
         <button v-if="searchQuery" class="btn-clear" @click="searchQuery = ''">✕</button>
       </div>
 
       <div class="status-tabs">
-        <button 
-          :class="['tab-btn', { active: statusFilter === 'todos' }]" 
+        <button
+          :class="['tab-btn', { active: statusFilter === 'todos' }]"
           @click="statusFilter = 'todos'"
         >
           Todos
         </button>
-        <button 
-          :class="['tab-btn', { active: statusFilter === 'activos' }]" 
+        <button
+          :class="['tab-btn', { active: statusFilter === 'activos' }]"
           @click="statusFilter = 'activos'"
         >
           Activos
         </button>
-        <button 
-          :class="['tab-btn', { active: statusFilter === 'inactivos' }]" 
+        <button
+          :class="['tab-btn', { active: statusFilter === 'inactivos' }]"
           @click="statusFilter = 'inactivos'"
         >
           Inactivos
@@ -370,7 +393,8 @@ onMounted(() => {
             <th>Socio</th>
             <th>Cédula</th>
             <th>Celular</th>
-            <th>Ahorro Base</th>
+            <th>Ahorro / Cuota</th>
+            <th>Inicio Ahorro</th>
             <th>Rifa 1</th>
             <th>Rifa 2</th>
             <th>Coordinador</th>
@@ -380,25 +404,31 @@ onMounted(() => {
         </thead>
         <tbody>
           <tr v-if="isLoading">
-            <td colspan="9" class="center-text">Cargando socios...</td>
+            <td colspan="10" class="center-text">Cargando socios...</td>
           </tr>
           <tr v-else-if="filteredUsers.length === 0">
-            <td colspan="9" class="center-text empty-state">No se encontraron socios con los filtros actuales.</td>
+            <td colspan="10" class="center-text empty-state">No se encontraron socios con los filtros actuales.</td>
           </tr>
           <tr v-for="u in filteredUsers" :key="u.id" :class="{ 'row-inactive': u.partnerStatus === 0 }">
             <td>
               <strong>{{ u.fullName }}</strong>
-              <small class="sub-text" style="display: block; font-size: 0.75rem; color: #718096;">
+              <small class="sub-text">
                 Perfil: {{ u.profile === 1 ? 'Admin' : u.profile === 2 ? 'Coord' : 'Usuario' }}
               </small>
             </td>
             <td>{{ u.documentId }}</td>
             <td>{{ u.cellphone }}</td>
             <td>
-              <span class="money-text">{{ formatCurrency(Number(u.savingsValue)) }}</span>
-              <small class="sub-text" style="display: block; font-size: 0.75rem; color: #718096;">
-                {{ getFrequencyLabel(Number(u.frequency)) }}
+              <span class="money-text">
+                {{ formatCurrency(u.quotaValue ?? calculateQuota(Number(u.savingsValue), Number(u.frequency))) }}
+              </span>
+              <small class="sub-text">
+                {{ getFrequencyLabel(Number(u.frequency)) }} · Mes: {{ formatCurrency(Number(u.savingsValue)) }}
               </small>
+            </td>
+            <td>
+              <span v-if="u.savingsStartDate" class="start-date-pill">{{ u.savingsStartDate }}</span>
+              <span v-else class="no-ticket-text">Sin definir</span>
             </td>
             <td>
               <div class="tickets-tag-container">
@@ -425,9 +455,9 @@ onMounted(() => {
             <td>
               <div class="action-buttons">
                 <button type="button" class="btn-action edit" @click="openEditModal(u)" title="Editar Socio">✏️</button>
-                <button 
-                  type="button" 
-                  :class="['btn-action', u.partnerStatus === 1 ? 'deactivate' : 'activate']" 
+                <button
+                  type="button"
+                  :class="['btn-action', u.partnerStatus === 1 ? 'deactivate' : 'activate']"
                   @click="toggleStatus(u)"
                   :title="u.partnerStatus === 1 ? 'Desactivar Socio' : 'Activar Socio'"
                 >
@@ -458,8 +488,8 @@ onMounted(() => {
               <input type="text" v-model="form.documentId" required :disabled="isEditing" />
             </div>
             <div class="field">
-              <label>Celular</label>
-              <input type="number" v-model="form.cellphone" required />
+              <label>Celular *</label>
+              <input type="text" v-model="form.cellphone" required />
             </div>
           </div>
 
@@ -476,22 +506,29 @@ onMounted(() => {
 
           <div class="form-row">
             <div class="field">
-              <label>Cuota de Ahorro Base ($) *</label>
+              <label>Ahorro Total Mensual ($) *</label>
               <input type="number" v-model="form.savingsValue" min="10000" step="5000" required />
+              <small class="quota-hint">
+                Cuota por pago: <strong>{{ formatCurrency(formCalculatedQuota) }}</strong>
+              </small>
             </div>
-            
-            <!-- CAMPO DE FRECUENCIA AÑADIDO -->
+
             <div class="field">
               <label>Frecuencia de Ahorro *</label>
               <select v-model="form.frequency" required>
-                <option :value="8">Cada 8 Días</option>
-                <option :value="15">Cada 15 Días (Quincenal)</option>
-                <option :value="30">Cada 30 Días (Mensual)</option>
+                <option :value="8">Cada 8 Días (Semanal ÷ 4)</option>
+                <option :value="15">Cada 15 Días (Quincenal ÷ 2)</option>
+                <option :value="30">Cada 30 Días (Mensual ÷ 1)</option>
               </select>
             </div>
           </div>
 
           <div class="form-row">
+            <div class="field">
+              <label>Fecha Inicio de Ahorro *</label>
+              <input type="date" v-model="form.savingsStartDate" required />
+            </div>
+
             <div class="field">
               <label>Coordinador Asignado *</label>
               <select v-model="form.coordinator" required>
@@ -501,6 +538,9 @@ onMounted(() => {
                 </option>
               </select>
             </div>
+          </div>
+
+          <div class="form-row">
             <div class="field">
               <label>Perfil en el Sistema</label>
               <select v-model="form.profile">
@@ -509,13 +549,13 @@ onMounted(() => {
                 <option :value="3">Socio Ahorrador (3)</option>
               </select>
             </div>
-          </div>
 
-          <div class="field checkbox-field" style="margin-bottom: 1rem;">
-            <label class="switch-box">
-              <input type="checkbox" v-model="form.canLogin" />
-              <span>¿Habilitar acceso al sistema web (Login)?</span>
-            </label>
+            <div class="field checkbox-field" style="justify-content: flex-end; padding-bottom: 0.4rem;">
+              <label class="switch-box">
+                <input type="checkbox" v-model="form.canLogin" />
+                <span>¿Habilitar acceso al sistema web (Login)?</span>
+              </label>
+            </div>
           </div>
 
           <!-- SECCIÓN RIFA 1 -->
@@ -579,290 +619,86 @@ onMounted(() => {
 </template>
 
 <style scoped>
-.users-view {
-  width: 100%;
-  display: flex;
-  flex-direction: column;
-  gap: 1.8rem;
-}
+.users-view { width: 100%; display: flex; flex-direction: column; gap: 1.8rem; }
+.view-header { display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 1rem; }
+.view-header h2 { color: var(--color-primary); font-size: 1.7rem; margin: 0; }
+.view-header p { color: var(--color-muted); font-size: 0.95rem; margin-top: 0.2rem; }
+.btn-create { background-color: var(--color-secondary); color: #fff; border: none; padding: 0.75rem 1.4rem; border-radius: 8px; font-weight: 700; cursor: pointer; display: flex; align-items: center; gap: 0.4rem; box-shadow: 0 4px 12px rgba(31, 122, 99, 0.25); }
+.btn-create:hover { opacity: 0.92; transform: translateY(-1px); }
 
-.view-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  flex-wrap: wrap;
-  gap: 1rem;
-}
-
-.view-header h2 {
-  color: var(--color-primary);
-  font-size: 1.7rem;
-  margin: 0;
-}
-
-.view-header p {
-  color: var(--color-muted);
-  font-size: 0.95rem;
-  margin-top: 0.2rem;
-}
-
-.btn-create {
-  background-color: var(--color-secondary);
-  color: #fff;
-  border: none;
-  padding: 0.75rem 1.4rem;
-  border-radius: 8px;
-  font-weight: 700;
-  cursor: pointer;
-  display: flex;
-  align-items: center;
-  gap: 0.4rem;
-  box-shadow: 0 4px 12px rgba(31, 122, 99, 0.25);
-}
-
-.btn-create:hover {
-  opacity: 0.92;
-  transform: translateY(-1px);
-}
-
-.stats-row {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
-  gap: 1.2rem;
-}
-
-.stat-card {
-  background: #fff;
-  padding: 1.3rem 1.6rem;
-  border-radius: 8px;
-  border: 1px solid var(--color-border);
-  display: flex;
-  flex-direction: column;
-  gap: 0.25rem;
-  box-shadow: 0 1px 3px rgba(0,0,0,0.05);
-}
-
+.stats-row { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 1.2rem; }
+.stat-card { background: #fff; padding: 1.3rem 1.6rem; border-radius: 8px; border: 1px solid var(--color-border); display: flex; flex-direction: column; gap: 0.25rem; box-shadow: 0 1px 3px rgba(0,0,0,0.05); }
 .stat-card.primary { border-left: 5px solid var(--color-primary); }
 .stat-card.green { border-left: 5px solid var(--color-secondary); }
 .stat-card.orange { border-left: 5px solid #dd6b20; }
+.stat-label { font-size: 0.85rem; color: var(--color-muted); font-weight: 600; }
+.stat-value { font-size: 1.55rem; color: var(--color-primary); }
 
-.stat-label {
-  font-size: 0.85rem;
-  color: var(--color-muted);
-  font-weight: 600;
-}
+.filters-bar { display: flex; justify-content: space-between; align-items: center; gap: 1.5rem; flex-wrap: wrap; }
+.search-box { position: relative; flex: 1; max-width: 480px; }
+.search-box input { width: 100%; padding: 0.75rem 2.4rem 0.75rem 2.6rem; border: 1px solid var(--color-border); border-radius: 8px; background-color: #fff; }
+.search-icon { position: absolute; left: 0.9rem; top: 50%; transform: translateY(-50%); opacity: 0.6; }
+.btn-clear { position: absolute; right: 0.8rem; top: 50%; transform: translateY(-50%); background: none; border: none; cursor: pointer; }
+.status-tabs { display: flex; background: #e2e8f0; border-radius: 8px; padding: 0.25rem; }
+.tab-btn { border: none; background: none; padding: 0.55rem 1.2rem; border-radius: 6px; cursor: pointer; font-weight: 600; font-size: 0.88rem; color: #4a5568; }
+.tab-btn.active { background: #fff; color: var(--color-primary); box-shadow: 0 2px 5px rgba(0,0,0,0.08); }
 
-.stat-value {
-  font-size: 1.55rem;
-  color: var(--color-primary);
-}
-
-.filters-bar {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  gap: 1.5rem;
-  flex-wrap: wrap;
-}
-
-.search-box {
-  position: relative;
-  flex: 1;
-  max-width: 480px;
-}
-
-.search-box input {
-  width: 100%;
-  padding: 0.75rem 2.4rem 0.75rem 2.6rem;
-  border: 1px solid var(--color-border);
-  border-radius: 8px;
-  background-color: #fff;
-}
-
-.search-icon {
-  position: absolute;
-  left: 0.9rem;
-  top: 50%;
-  transform: translateY(-50%);
-  opacity: 0.6;
-}
-
-.btn-clear {
-  position: absolute;
-  right: 0.8rem;
-  top: 50%;
-  transform: translateY(-50%);
-  background: none;
-  border: none;
-  cursor: pointer;
-}
-
-.status-tabs {
-  display: flex;
-  background: #e2e8f0;
-  border-radius: 8px;
-  padding: 0.25rem;
-}
-
-.tab-btn {
-  border: none;
-  background: none;
-  padding: 0.55rem 1.2rem;
-  border-radius: 6px;
-  cursor: pointer;
-  font-weight: 600;
-  font-size: 0.88rem;
-  color: #4a5568;
-}
-
-.tab-btn.active {
-  background: #fff;
-  color: var(--color-primary);
-  box-shadow: 0 2px 5px rgba(0,0,0,0.08);
-}
-
-.table-container {
-  width: 100%;
-  background: #fff;
-  border-radius: 8px;
-  border: 1px solid var(--color-border);
-  box-shadow: 0 1px 3px rgba(0,0,0,0.05);
-  overflow-x: auto;
-}
-
-table {
-  width: 100%;
-  border-collapse: collapse;
-  text-align: left;
-  font-size: 0.92rem;
-}
-
-th, td {
-  padding: 0.95rem 1.1rem;
-  border-bottom: 1px solid var(--color-border);
-  white-space: nowrap;
-}
-
-th {
-  background-color: #f7fafc;
-  color: var(--color-primary);
-  font-weight: 700;
-  font-size: 0.85rem;
-  text-transform: uppercase;
-}
-
-.row-inactive td {
-  opacity: 0.6;
-  background-color: #f7fafc;
-}
-
-.money-text {
-  font-weight: 700;
-  color: var(--color-primary);
-  display: block;
-}
-
+.table-container { width: 100%; background: #fff; border-radius: 8px; border: 1px solid var(--color-border); box-shadow: 0 1px 3px rgba(0,0,0,0.05); overflow-x: auto; }
+table { width: 100%; border-collapse: collapse; text-align: left; font-size: 0.92rem; }
+th, td { padding: 0.95rem 1.1rem; border-bottom: 1px solid var(--color-border); white-space: nowrap; }
+th { background-color: #f7fafc; color: var(--color-primary); font-weight: 700; font-size: 0.85rem; text-transform: uppercase; }
+.row-inactive td { opacity: 0.6; background-color: #f7fafc; }
+.money-text { font-weight: 700; color: var(--color-primary); display: block; }
+.sub-text { display: block; font-size: 0.75rem; color: #718096; }
+.start-date-pill { background: #edf2f7; color: #2d3748; padding: 0.2rem 0.55rem; border-radius: 6px; font-size: 0.82rem; font-weight: 600; }
 .center-text { text-align: center; padding: 2rem; color: #718096; }
 
-.tickets-tag-container {
-  display: flex;
-  gap: 0.3rem;
-  flex-wrap: wrap;
-}
-
-.ticket-badge {
-  padding: 0.15rem 0.45rem;
-  border-radius: 6px;
-  font-weight: 700;
-  font-size: 0.75rem;
-}
-
-.ticket-badge.r1 {
-  background-color: #feebc8;
-  color: #744210;
-  border: 1px solid #fbd38d;
-}
-
-.ticket-badge.r2 {
-  background-color: #bee3f8;
-  color: #2b6cb0;
-  border: 1px solid #90cdf4;
-}
-
+.tickets-tag-container { display: flex; gap: 0.3rem; flex-wrap: wrap; }
+.ticket-badge { padding: 0.15rem 0.45rem; border-radius: 6px; font-weight: 700; font-size: 0.75rem; }
+.ticket-badge.r1 { background-color: #feebc8; color: #744210; border: 1px solid #fbd38d; }
+.ticket-badge.r2 { background-color: #bee3f8; color: #2b6cb0; border: 1px solid #90cdf4; }
 .no-ticket-text { color: #a0aec0; }
 
-.status-pill {
-  padding: 0.25rem 0.65rem;
-  border-radius: 12px;
-  font-size: 0.78rem;
-  font-weight: 700;
-}
-
-.status-pill.active { background: #c6f6d5; color: #22543d; }
-.status-pill.inactive { background: #fed7d7; color: #9b2c2c; }
+.status-pill { padding: 0.25rem 0.65rem; border-radius: 12px; font-size: 0.78rem; font-weight: 700; }
+.status-pill.active { background-color: #c6f6d5; color: #22543d; }
+.status-pill.inactive { background-color: #fed7d7; color: #9b2c2c; }
 
 .action-buttons { display: flex; gap: 0.4rem; }
-.btn-action { background: none; border: 1px solid var(--color-border); border-radius: 6px; padding: 0.35rem 0.5rem; cursor: pointer; font-size: 0.88rem; }
-.btn-action:hover { background-color: #f7fafc; }
+.btn-action { border: 1px solid var(--color-border); background: #fff; padding: 0.35rem 0.55rem; border-radius: 6px; cursor: pointer; }
+.btn-action:hover { background: #edf2f7; }
 
-/* Modal */
-.modal-overlay {
-  position: fixed; inset: 0; background-color: rgba(8, 28, 45, 0.65); display: flex; align-items: center; justify-content: center; z-index: 2000; padding: 1.5rem; backdrop-filter: blur(3px);
-}
-
-.modal-box {
-  background-color: #fff; border-radius: 8px; width: 700px; max-width: 100%; padding: 2.2rem; max-height: 92vh; overflow-y: auto;
-}
-
-.modal-top {
-  display: flex; justify-content: space-between; align-items: center; margin-bottom: 1.3rem; border-bottom: 1px solid var(--color-border); padding-bottom: 0.8rem;
-}
-
-.btn-close { background: none; border: none; font-size: 1.3rem; cursor: pointer; }
-
-.modal-error {
-  background: #fee2e2; color: #991b1b; padding: 0.75rem 1rem; border-radius: 8px; margin-bottom: 1.2rem; font-size: 0.88rem;
-}
-
-.modal-form { display: flex; flex-direction: column; gap: 1.2rem; }
-.form-row { display: grid; grid-template-columns: 1fr 1fr; gap: 1.2rem; }
+.modal-overlay { position: fixed; inset: 0; background: rgba(8,28,45,0.65); display: flex; align-items: center; justify-content: center; z-index: 2000; padding: 1.5rem; }
+.modal-box { background: #fff; border-radius: 8px; width: 650px; max-width: 100%; padding: 2rem; max-height: 92vh; overflow-y: auto; }
+.modal-top { display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid var(--color-border); padding-bottom: 1rem; margin-bottom: 1.2rem; }
+.modal-top h3 { margin: 0; color: var(--color-primary); }
+.btn-close { background: none; border: none; font-size: 1.2rem; cursor: pointer; }
+.modal-error { background: #fee2e2; color: #991b1b; padding: 0.75rem; border-radius: 6px; margin-bottom: 1rem; font-size: 0.9rem; }
+.modal-form { display: flex; flex-direction: column; gap: 1rem; }
+.form-row { display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; }
 .field { display: flex; flex-direction: column; gap: 0.35rem; }
 .field label { font-size: 0.85rem; font-weight: 600; color: var(--color-primary); }
-.field input, .field select { width: 100%; padding: 0.72rem 0.9rem; border: 1px solid var(--color-border); border-radius: 8px; font-size: 0.92rem; }
+.field input, .field select { padding: 0.7rem; border: 1px solid var(--color-border); border-radius: 6px; }
+.quota-hint { font-size: 0.78rem; color: var(--color-secondary); }
+.switch-box { display: flex; align-items: center; gap: 0.5rem; cursor: pointer; font-size: 0.88rem; }
 
-.switch-box { display: flex; align-items: center; gap: 0.6rem; font-size: 0.85rem; font-weight: 600; cursor: pointer; }
-.switch-box input { width: 18px; height: 18px; }
-
-/* Cajas de Boletas Rifa 1 y Rifa 2 */
-.ticket-box { border-radius: 8px; padding: 1rem; display: flex; flex-direction: column; gap: 0.6rem; }
-.ticket-box.r1-border { background-color: #fffaf0; border: 1px solid #feebc8; }
-.ticket-box.r2-border { background-color: #f7fafc; border: 1px solid #e2e8f0; }
-
-.ticket-box-title { font-size: 0.85rem; font-weight: 700; color: var(--color-primary); }
-
-.ticket-input-group { display: flex; gap: 0.6rem; }
-.ticket-input-group input { width: 100px; padding: 0.55rem 0.75rem; border: 1px solid var(--color-border); border-radius: 6px; font-weight: 700; text-align: center; }
-
-.btn-add-ticket { border: none; padding: 0.55rem 0.9rem; border-radius: 6px; font-weight: 700; font-size: 0.82rem; cursor: pointer; }
-.btn-add-ticket.r1-btn { background-color: #dd6b20; color: #fff; }
-.btn-add-ticket.r2-btn { background-color: #2b6cb0; color: #fff; }
-
-.ticket-tags-list { display: flex; flex-wrap: wrap; gap: 0.4rem; min-height: 28px; align-items: center; }
-
-.ticket-tag { display: flex; align-items: center; gap: 0.4rem; padding: 0.2rem 0.55rem; border-radius: 12px; font-size: 0.78rem; font-weight: 700; }
-.ticket-tag.r1-tag { background-color: #feebc8; color: #744210; border: 1px solid #fbd38d; }
-.ticket-tag.r2-tag { background-color: #bee3f8; color: #2b6cb0; border: 1px solid #90cdf4; }
-.ticket-tag button { background: none; border: none; cursor: pointer; font-size: 0.75rem; }
-
-.no-tickets-selected { font-size: 0.78rem; color: #a0aec0; }
+.ticket-box { padding: 1rem; border-radius: 8px; border: 1px solid var(--color-border); background: #f8fafc; }
+.r1-border { border-left: 4px solid #dd6b20; }
+.r2-border { border-left: 4px solid #3182ce; }
+.ticket-box-title { display: block; font-size: 0.85rem; font-weight: 700; color: var(--color-primary); margin-bottom: 0.6rem; }
+.ticket-input-group { display: flex; gap: 0.6rem; margin-bottom: 0.7rem; }
+.ticket-input-group input { width: 100px; padding: 0.5rem 0.7rem; border: 1px solid var(--color-border); border-radius: 6px; }
+.btn-add-ticket { border: none; color: #fff; padding: 0.5rem 0.9rem; border-radius: 6px; font-weight: 600; cursor: pointer; }
+.r1-btn { background: #dd6b20; }
+.r2-btn { background: #3182ce; }
+.ticket-tags-list { display: flex; gap: 0.45rem; flex-wrap: wrap; }
+.ticket-tag { display: inline-flex; align-items: center; gap: 0.35rem; padding: 0.2rem 0.55rem; border-radius: 6px; font-size: 0.8rem; font-weight: 700; }
+.r1-tag { background: #feebc8; color: #744210; }
+.r2-tag { background: #bee3f8; color: #2b6cb0; }
+.ticket-tag button { background: none; border: none; cursor: pointer; font-weight: 700; color: inherit; }
+.no-tickets-selected { font-size: 0.8rem; color: #a0aec0; }
 
 .modal-buttons { display: flex; justify-content: flex-end; gap: 1rem; margin-top: 1rem; }
-.btn-cancel { background: none; border: 1px solid var(--color-border); padding: 0.75rem 1.4rem; border-radius: 8px; font-weight: 600; cursor: pointer; }
-.btn-save { background-color: var(--color-secondary); color: #fff; border: none; padding: 0.75rem 1.6rem; border-radius: 8px; font-weight: 700; cursor: pointer; }
-.btn-save:disabled { opacity: 0.5; cursor: not-allowed; }
-
-@media (max-width: 768px) {
-  .form-row { grid-template-columns: 1fr; }
-  .filters-bar { flex-direction: column; align-items: stretch; }
-}
+.btn-cancel { background: none; border: 1px solid var(--color-border); padding: 0.7rem 1.4rem; border-radius: 6px; cursor: pointer; }
+.btn-save { background: var(--color-secondary); color: #fff; border: none; padding: 0.7rem 1.4rem; border-radius: 6px; font-weight: 700; cursor: pointer; }
+.btn-save:disabled { opacity: 0.5; }
 </style>

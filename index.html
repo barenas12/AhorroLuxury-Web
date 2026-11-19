@@ -1,12 +1,110 @@
 <!DOCTYPE html>
-<html lang="">
+<html lang="es-CO">
   <head>
-    <meta charset="UTF-8">
-    <link rel="icon" href="/favicon.ico">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Vite App</title>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <link rel="icon" href="/favicon.ico" />
+    <link rel="apple-touch-icon" href="/img/logo-luxury.png" />
+
+    <!-- SEO Principal -->
+    <title>Ahorro Luxury | Ahorro Programado Inteligente, Rentabilidad y Rifa Anual</title>
+    <meta
+      name="description"
+      content="Ahorro Luxury: sistema de ahorro programado semanal o quincenal con rentabilidad mínima garantizada del 20%, respaldo en activos reales, préstamos a socios y rifa mensual."
+    />
+    <meta name="robots" content="index, follow, max-image-preview:large, max-snippet:-1" />
+    <meta name="author" content="Ahorro Luxury" />
+    <meta name="theme-color" content="#081c2d" />
+    <link rel="canonical" href="https://ahorro-luxury-web-one.vercel.app/" />
+
+    <!-- Open Graph (Facebook, WhatsApp, LinkedIn) -->
+    <meta property="og:type" content="website" />
+    <meta property="og:locale" content="es_CO" />
+    <meta property="og:site_name" content="Ahorro Luxury" />
+    <meta property="og:title" content="Ahorro Luxury | Ahorro Programado Inteligente y Rentabilidad" />
+    <meta
+      property="og:description"
+      content="Aportes semanales o quincenales con rentabilidad mínima garantizada del 20%, respaldo en activos reales y 36 oportunidades al año para ganar con nuestra rifa."
+    />
+    <meta property="og:url" content="https://ahorro-luxury-web-one.vercel.app/" />
+    <meta property="og:image" content="https://ahorro-luxury-web-one.vercel.app/img/logo-luxury.png" />
+    <meta property="og:image:alt" content="Logo oficial de Ahorro Luxury" />
+
+    <!-- Twitter / X Card -->
+    <meta name="twitter:card" content="summary_large_image" />
+    <meta name="twitter:title" content="Ahorro Luxury | Ahorro Programado Inteligente" />
+    <meta
+      name="twitter:description"
+      content="Tu capital respaldado y tu rentabilidad garantizada del 20% con Ahorro Luxury. Conoce nuestro sistema de ahorro programado y rifa mensual."
+    />
+    <meta name="twitter:image" content="https://ahorro-luxury-web-one.vercel.app/img/logo-luxury.png" />
+
+    <!-- Datos Estructurados (JSON-LD) según Google Search Central -->
+    <script type="application/ld+json">
+      {
+        "@context": "https://schema.org",
+        "@graph": [
+          {
+            "@type": "Organization",
+            "@id": "https://ahorro-luxury-web-one.vercel.app/#organization",
+            "name": "Ahorro Luxury",
+            "url": "https://ahorro-luxury-web-one.vercel.app/",
+            "logo": {
+              "@type": "ImageObject",
+              "url": "https://ahorro-luxury-web-one.vercel.app/img/logo-luxury.png"
+            },
+            "description": "Sistema de ahorro programado semanal o quincenal con respaldo en activos reales, préstamos a socios y rifa mensual."
+          },
+          {
+            "@type": "WebSite",
+            "@id": "https://ahorro-luxury-web-one.vercel.app/#website",
+            "url": "https://ahorro-luxury-web-one.vercel.app/",
+            "name": "Ahorro Luxury",
+            "inLanguage": "es-CO",
+            "publisher": {
+              "@id": "https://ahorro-luxury-web-one.vercel.app/#organization"
+            }
+          },
+          {
+            "@type": "FAQPage",
+            "mainEntity": [
+              {
+                "@type": "Question",
+                "name": "¿Qué es el Ahorro Programado de Ahorro Luxury?",
+                "acceptedAnswer": {
+                  "@type": "Answer",
+                  "text": "Es un sistema de ahorro semanal o quincenal respaldado en negocios como préstamos con garantía en oro, prendas, vehículos y efectivo, con rentabilidad mínima garantizada del 20% y 100% de retorno seguro del capital."
+                }
+              },
+              {
+                "@type": "Question",
+                "name": "¿Cómo funciona la rentabilidad y liquidación?",
+                "acceptedAnswer": {
+                  "@type": "Answer",
+                  "text": "El ahorro inicia el 16 de enero, cierra el 4 de diciembre y la liquidación final se realiza el 11 de diciembre entregando el 100% del capital más una rentabilidad garantizada del 20%. Además ofrece beneficio de descapitalización anticipada de hasta el 50%."
+                }
+              },
+              {
+                "@type": "Question",
+                "name": "¿Cómo funciona la rifa mensual y el premio mayor?",
+                "acceptedAnswer": {
+                  "@type": "Answer",
+                  "text": "La rifa mensual entrega $700.000 cada último viernes de mes y un Premio Mayor de $13.000.000 el 18 de diciembre, sumando $20.700.000 en premios durante el año con 36 oportunidades de ganar."
+                }
+              }
+            ]
+          }
+        ]
+      }
+    </script>
   </head>
   <body>
+    <noscript>
+      <div style="padding: 1.5rem; font-family: sans-serif; text-align: center;">
+        <h1>Ahorro Luxury — Ahorro Programado Inteligente</h1>
+        <p>Activa JavaScript para acceder a la plataforma interactiva de Ahorro Luxury.</p>
+      </div>
+    </noscript>
     <div id="app"></div>
     <script type="module" src="/src/main.ts"></script>
   </body>

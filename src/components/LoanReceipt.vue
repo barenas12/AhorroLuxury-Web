@@ -12,8 +12,7 @@ export interface LoanReceiptData {
   interestRate: number
   deliveryDate: string
   installments: number
-  dueDate: string
-  daysLate: number
+  overdueLabel: string
   interestPayment: number
   remainingInterest: number
   capitalPayment: number
@@ -110,9 +109,8 @@ defineExpose({ downloadPDF })
 
       <section class="receipt-section">
         <div class="receipt-row"><span>Fecha Entrega</span><strong>{{ formatDate(receiptData.deliveryDate) }}</strong></div>
-        <div class="receipt-row"><span>N° Cuotas</span><strong>{{ receiptData.installments }}</strong></div>
-        <div class="receipt-row"><span>Fecha límite de pago</span><strong>{{ formatDate(receiptData.dueDate) }}</strong></div>
-        <div class="receipt-row"><span>Días en mora</span><strong>{{ receiptData.daysLate }}</strong></div>
+        <div class="receipt-row"><span>N° Cuotas (Info)</span><strong>{{ receiptData.installments }}</strong></div>
+        <div class="receipt-row"><span>Tiempo en mora</span><strong>{{ receiptData.overdueLabel }}</strong></div>
       </section>
 
       <section class="receipt-section balance-section">
@@ -141,104 +139,21 @@ defineExpose({ downloadPDF })
 </template>
 
 <style scoped>
-.receipt-hidden-container {
-  position: absolute;
-  left: -10000px;
-  top: 0;
-}
-
-.receipt {
-  box-sizing: border-box;
-  width: 290px;
-  padding: 14px;
-  background: #fff;
-  color: #111;
-  font-family: Arial, sans-serif;
-  font-size: 12px;
-  overflow-wrap: anywhere;
-}
-
-.receipt-header {
-  text-align: center;
-  padding-bottom: 10px;
-  border-bottom: 1px dashed #333;
-}
-
-.receipt-logo {
-  display: block;
-  width: 120px;
-  height: 52px;
-  object-fit: contain;
-  margin: 0 auto 6px;
-}
-
-.receipt-header h1 {
-  margin: 0;
-  font-size: 19px;
-}
-
-.receipt-header p {
-  margin: 4px 0 0;
-  font-size: 13px;
-}
-
-.receipt-section {
-  padding: 8px 0;
-  border-bottom: 1px dashed #333;
-}
-
-.receipt-row {
-  display: flex;
-  justify-content: space-between;
-  align-items: flex-start;
-  gap: 8px;
-  padding: 3px 0;
-}
-
-.receipt-row span {
-  flex: 1;
-  min-width: 0;
-}
-
-.receipt-row strong {
-  flex-shrink: 0;
-  max-width: 58%;
-  text-align: right;
-}
-
-.balance-section {
-  display: grid;
-  grid-template-columns: 1fr;
-}
-
-.total-row {
-  border-top: 1px solid #999;
-  margin-top: 4px;
-  padding-top: 7px;
-  font-size: 14px;
-  font-weight: 700;
-}
-
-.description {
-  min-height: 52px;
-  padding: 9px 0;
-  border-bottom: 1px dashed #333;
-}
-
-.description p {
-  margin: 5px 0 0;
-}
-
-footer {
-  padding-top: 10px;
-  text-align: center;
-}
-
-footer p {
-  margin: 0 0 5px;
-}
-
-footer small {
-  color: #555;
-}
+.receipt-hidden-container { position: absolute; left: -10000px; top: 0; }
+.receipt { box-sizing: border-box; width: 290px; padding: 14px; background: #fff; color: #111; font-family: Arial, sans-serif; font-size: 12px; overflow-wrap: anywhere; }
+.receipt-header { text-align: center; padding-bottom: 10px; border-bottom: 1px dashed #333; }
+.receipt-logo { display: block; width: 120px; height: 52px; object-fit: contain; margin: 0 auto 6px; }
+.receipt-header h1 { margin: 0; font-size: 19px; }
+.receipt-header p { margin: 4px 0 0; font-size: 13px; }
+.receipt-section { padding: 8px 0; border-bottom: 1px dashed #333; }
+.receipt-row { display: flex; justify-content: space-between; align-items: flex-start; gap: 8px; padding: 3px 0; }
+.receipt-row span { flex: 1; min-width: 0; }
+.receipt-row strong { flex-shrink: 0; max-width: 58%; text-align: right; }
+.balance-section { display: grid; grid-template-columns: 1fr; }
+.total-row { border-top: 1px solid #999; margin-top: 4px; padding-top: 7px; font-size: 14px; font-weight: 700; }
+.description { min-height: 52px; padding: 9px 0; border-bottom: 1px dashed #333; }
+.description p { margin: 5px 0 0; }
+footer { padding-top: 10px; text-align: center; }
+footer p { margin: 0 0 5px; }
+footer small { color: #555; }
 </style>

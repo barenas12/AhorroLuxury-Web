@@ -10,6 +10,7 @@ import TheSidebar from "./components/Sidebar.vue";
 import Dashboard, { type UserSession } from "./components/Dashboard.vue";
 import TheFooter from "./components/TheFooter.vue";
 import ChangePasswordModal from "./components/ChangePasswordModal.vue";
+import SeoHead from "./components/SeoHead.vue";
 
 type ViewMode = "home" | "login" | "dashboard";
 
@@ -189,6 +190,7 @@ const onPasswordChanged = (): void => {
 
 <template>
   <div class="app-layout">
+    <SeoHead :view="currentView" :section="currentSection" />
     <ChangePasswordModal
       v-if="showResetPassModal && currentUser"
       :username="currentUser.user || currentUser.username || ''"

@@ -61,6 +61,9 @@ const benefits: BenefitCard[] = [
               v-if="item.isImage"
               :src="item.icon"
               :alt="item.title"
+              width="72"
+              height="72"
+              loading="lazy"
               class="icon-img"
             />
             <span v-else>{{ item.icon }}</span>
@@ -109,9 +112,9 @@ const benefits: BenefitCard[] = [
 
 /* Imagen con mayor tamaño y proporción conservada */
 .icon-img {
-  width: 72px;             /* Tamaño aumentado (puedes probar entre 56px y 72px) */
-  height: 72  px;
-  object-fit: contain;     /* Evita distorsión */
+  width: 72px;
+  height: 72px;
+  object-fit: contain;
   display: block;
 }
 
