@@ -1,8 +1,10 @@
 <script setup lang="ts">
 import { computed, ref } from "vue";
+import type { ModuleAvailability } from "../utils/viewerScope";
 
 export interface UserSession {
   id?: number;
+  partnerId?: number | null;
   username?: string;
   full_name?: string;
   name?: string;
@@ -20,15 +22,18 @@ export interface SidebarItem {
   isImage: boolean;
   badge?: string;
   requiredProfiles?: number[];
+  availabilityKey?: keyof ModuleAvailability;
 }
 
 interface Props {
   user: UserSession;
   activeSection?: string;
+  availability?: ModuleAvailability | null;
 }
 
 const props = withDefaults(defineProps<Props>(), {
   activeSection: "resumen",
+  availability: null,
 });
 
 // Si ya tienes un defineEmits, agrégale 'logout':
@@ -53,39 +58,51 @@ const menuItems = ref<SidebarItem[]>([
     label: "Usuarios",
     icon: "/icon/users.png",
     requiredProfiles: [1, 2],
+    availabilityKey: "hasUsers",
     isImage: true,
   },
   {
     id: "ahorro",
     label: "Ahorro Programado",
     icon: "/icon/savings.png",
+    availabilityKey: "hasSavings",
     isImage: true,
   },
   {
     id: "rifa1",
     label: "Rifa Mensual 1",
     icon: "/icon/raffle.png",
+    availabilityKey: "hasRifa1",
     isImage: true,
   },
   {
     id: "rifa2",
     label: "Rifa Mensual 2",
     icon: "/icon/raffle.png",
+    availabilityKey: "hasRifa2",
     isImage: true,
   },
   {
     id: "prestamos",
     label: "Préstamos y Respaldos",
     icon: "/icon/loans.png",
+    availabilityKey: "hasLoans",
     isImage: true,
   },
   {
     id: "pagos",
     label: "Control de Pagos y Multas",
     icon: "/icon/pay.png",
+    availabilityKey: "hasPayments",
     isImage: true,
   },
-  { id: "egresos", label: "Control de Egresos", icon: "💸", isImage: false },
+  {
+    id: "egresos",
+    label: "Control de Egresos",
+    icon: "💸",
+    requiredProfiles: [1],
+    isImage: false,
+  },
 ]);
 
 const displayName = computed<string>(() => {
@@ -113,9 +130,9 @@ const roleLabel = computed<string>(() => {
     case 2:
       return "Coordinador";
     case 3:
-      return "Usuario";
+      return "Socio";
     default:
-      return "Usuario";
+      return "Socio";
   }
 });
 
@@ -129,10 +146,14 @@ const roleBadgeClass = computed<string>(() => {
 const visibleMenuItems = computed<SidebarItem[]>(() => {
   const currentProfile = Number(props.user.profile);
   return menuItems.value.filter((item) => {
-    if (!item.requiredProfiles || item.requiredProfiles.length === 0) {
-      return true;
+    if (item.requiredProfiles && item.requiredProfiles.length > 0 && !item.requiredProfiles.includes(currentProfile)) {
+      return false;
     }
-    return item.requiredProfiles.includes(currentProfile);
+    // Para Coordinador (2) y Socio (3), ocultar módulos que no tengan datos
+    if (currentProfile !== 1 && item.availabilityKey && props.availability) {
+      return Boolean(props.availability[item.availabilityKey]);
+    }
+    return true;
   });
 });
 

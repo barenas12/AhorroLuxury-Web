@@ -11,6 +11,7 @@ import Dashboard, { type UserSession } from "./components/Dashboard.vue";
 import TheFooter from "./components/TheFooter.vue";
 import ChangePasswordModal from "./components/ChangePasswordModal.vue";
 import SeoHead from "./components/SeoHead.vue";
+import { buildScopeQuery, getUserProfile, type ModuleAvailability } from "./utils/viewerScope";
 
 type ViewMode = "home" | "login" | "dashboard";
 
@@ -18,6 +19,24 @@ const currentView = ref<ViewMode>("home");
 const currentSection = ref<string>("resumen");
 const currentUser = ref<UserSession | null>(null);
 const showResetPassModal = ref<boolean>(false);
+const moduleAvailability = ref<ModuleAvailability | null>(null);
+
+const loadModuleAvailability = async (user: UserSession | null): Promise<void> => {
+  if (!user || getUserProfile(user) === 1) {
+    moduleAvailability.value = null;
+    return;
+  }
+  try {
+    const qs = buildScopeQuery(user);
+    const res = await fetch(`${import.meta.env.VITE_API_URL}/api/dashboard/personal?${qs}`);
+    const json = await res.json();
+    if (json.success && json.data?.availability) {
+      moduleAvailability.value = json.data.availability;
+    }
+  } catch (err) {
+    console.error("Error cargando disponibilidad de módulos:", err);
+  }
+};
 
 // Notificación emergente (Toast)
 const toastMessage = ref<string>("");
@@ -126,6 +145,7 @@ onMounted(() => {
       currentView.value = "dashboard";
       showResetPassModal.value = currentUser.value?.resetPassword === 1;
       updateLastActivity();
+      loadModuleAvailability(currentUser.value);
     } else {
       handleInactivityTimeout();
     }
@@ -173,6 +193,7 @@ const handleLoginSuccess = (user: UserSession): void => {
   localStorage.setItem(STORAGE_TIME_KEY, Date.now().toString());
 
   resetInactivityTimer();
+  loadModuleAvailability(user);
 };
 
 const onPasswordChanged = (): void => {
@@ -223,6 +244,7 @@ const onPasswordChanged = (): void => {
         <TheSidebar
           :user="currentUser"
           :activeSection="currentSection"
+          :availability="moduleAvailability"
           @select-section="(sec) => (currentSection = sec)"
           @logout="handleManualLogout"
         />

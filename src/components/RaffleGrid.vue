@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { ref, computed, onMounted, watch } from 'vue'
+import { buildScopeQuery, isAdminUser, type ViewerUser } from '../utils/viewerScope'
 
 export interface RaffleItem {
   number: string
@@ -33,12 +34,15 @@ interface CoordinatorOption {
 const props = defineProps<{
   raffleType: '1' | '2'
   title: string
+  currentUser?: ViewerUser
 }>()
 
+const isAdmin = computed(() => isAdminUser(props.currentUser))
 const board = ref<RaffleItem[]>([])
 const activePartners = ref<PartnerOption[]>([])
 const coordinators = ref<CoordinatorOption[]>([])
 const isLoading = ref<boolean>(false)
+const searchColumn = ref<'todas' | 'number' | 'fullName' | 'contact' | 'coordinatorName'>('todas')
 const filterQuery = ref<string>('')
 const statusFilter = ref<'todos' | 'disponibles' | 'asignadas' | 'al_dia' | 'en_mora'>('todos')
 const selectedNumber = ref<RaffleItem | null>(null)
@@ -63,18 +67,31 @@ const loadRaffleData = async () => {
   isLoading.value = true
   selectedNumber.value = null
   try {
-    const [resBoard, resPartners, resCoords] = await Promise.all([
-      fetch(`${import.meta.env.VITE_API_URL}/api/users/raffle/${props.raffleType}`),
-      fetch(`${import.meta.env.VITE_API_URL}/api/payments/partners?onlyPartners=1`),
-      fetch(`${import.meta.env.VITE_API_URL}/api/users/coordinators`)
-    ])
-    const dataBoard = await resBoard.json()
-    const dataPartners = await resPartners.json()
-    const dataCoords = await resCoords.json()
+    const qs = buildScopeQuery(props.currentUser)
+    const requests: Promise<Response>[] = [
+      fetch(`${import.meta.env.VITE_API_URL}/api/users/raffle/${props.raffleType}${qs ? `?${qs}` : ''}`)
+    ]
+    if (isAdmin.value) {
+      requests.push(
+        fetch(`${import.meta.env.VITE_API_URL}/api/payments/partners?onlyPartners=1`),
+        fetch(`${import.meta.env.VITE_API_URL}/api/users/coordinators`)
+      )
+    }
 
-    if (dataBoard.success) board.value = dataBoard.data
-    if (dataPartners.success) activePartners.value = dataPartners.data
-    if (dataCoords.success) coordinators.value = dataCoords.data
+    const [resBoard, resPartners, resCoords] = await Promise.all(requests)
+    if (resBoard) {
+      const dataBoard = await resBoard.json()
+      if (dataBoard.success) board.value = dataBoard.data
+    }
+
+    if (resPartners) {
+      const dataPartners = await resPartners.json()
+      if (dataPartners.success) activePartners.value = dataPartners.data
+    }
+    if (resCoords) {
+      const dataCoords = await resCoords.json()
+      if (dataCoords.success) coordinators.value = dataCoords.data
+    }
   } catch (err) {
     console.error(`Error al cargar datos de ${props.title}:`, err)
   } finally {
@@ -107,14 +124,31 @@ const filteredBoard = computed(() => {
   if (!q) return list
 
   return list.filter(item => {
-    const matchNumber = item.number.includes(q)
-    const matchPartner = item.partner && (
-      item.partner.fullName.toLowerCase().includes(q) ||
-      String(item.partner.documentId || '').toLowerCase().includes(q) ||
-      String(item.partner.cellphone || '').toLowerCase().includes(q) ||
-      String(item.partner.coordinatorName || '').toLowerCase().includes(q)
-    )
-    return matchNumber || Boolean(matchPartner)
+    switch (searchColumn.value) {
+      case 'number':
+        return item.number.includes(q)
+      case 'fullName':
+        return Boolean(item.partner && item.partner.fullName.toLowerCase().includes(q))
+      case 'contact':
+        return Boolean(
+          item.partner && (
+            String(item.partner.documentId || '').toLowerCase().includes(q) ||
+            String(item.partner.cellphone || '').toLowerCase().includes(q)
+          )
+        )
+      case 'coordinatorName':
+        return Boolean(item.partner && String(item.partner.coordinatorName || '').toLowerCase().includes(q))
+      default: {
+        const matchNumber = item.number.includes(q)
+        const matchPartner = item.partner && (
+          item.partner.fullName.toLowerCase().includes(q) ||
+          String(item.partner.documentId || '').toLowerCase().includes(q) ||
+          String(item.partner.cellphone || '').toLowerCase().includes(q) ||
+          String(item.partner.coordinatorName || '').toLowerCase().includes(q)
+        )
+        return matchNumber || Boolean(matchPartner)
+      }
+    }
   })
 })
 
@@ -215,11 +249,11 @@ onMounted(() => {
     <!-- Estadísticas -->
     <div class="stats-row">
       <div class="stat-card primary">
-        <span class="stat-label">Números Asignados</span>
-        <strong class="stat-value">{{ totalAssigned }} / 100</strong>
-        <small class="stat-desc">{{ occupancyPercentage }}% de ocupación</small>
+        <span class="stat-label">{{ isAdmin ? 'Números Asignados' : 'Boletas Asignadas' }}</span>
+        <strong class="stat-value">{{ isAdmin ? `${totalAssigned} / 100` : totalAssigned }}</strong>
+        <small class="stat-desc">{{ isAdmin ? `${occupancyPercentage}% de ocupación` : 'En tu alcance informativo' }}</small>
       </div>
-      <div class="stat-card green">
+      <div v-if="isAdmin" class="stat-card green">
         <span class="stat-label">Disponibles</span>
         <strong class="stat-value">{{ totalAvailable }}</strong>
         <small class="stat-desc">Clic en un número libre para asignar</small>
@@ -229,7 +263,7 @@ onMounted(() => {
         <strong class="stat-value">{{ totalPaid }} / {{ totalUnpaid }}</strong>
         <small class="stat-desc">{{ totalPaid }} pagadas · {{ totalUnpaid }} pendientes</small>
       </div>
-      <div class="stat-card legend-card">
+      <div v-if="isAdmin" class="stat-card legend-card">
         <span class="stat-label">Convención</span>
         <div class="legend-items">
           <div class="legend-item"><span class="chip available"></span> Libre</div>
@@ -239,29 +273,66 @@ onMounted(() => {
       </div>
     </div>
 
-    <!-- Barra de Búsqueda y Filtro de Estado (independiente de la otra rifa) -->
+    <!-- Barra de Búsqueda por Columna y Filtro de Estado -->
     <div class="filters-bar">
-      <div class="search-bar">
-        <span class="search-icon">🔍</span>
-        <input
-          type="text"
-          v-model="filterQuery"
-          placeholder="Filtrar por nombre asignado, número (ej. 07), celular o coordinador..."
-        />
-        <button v-if="filterQuery" class="btn-clear" @click="filterQuery = ''">✕</button>
+      <div class="column-filter-group">
+        <select v-model="searchColumn" class="column-select" @change="filterQuery = ''">
+          <option value="todas">Columna: Todas</option>
+          <option value="number">N° Boleta</option>
+          <option value="fullName">Nombre Asignado</option>
+          <option value="contact">Celular / Doc</option>
+          <option value="coordinatorName">Coordinador</option>
+        </select>
+
+        <div class="search-bar">
+          <span class="search-icon">🔍</span>
+          <input
+            type="text"
+            v-model="filterQuery"
+            placeholder="Escribe el valor a filtrar..."
+          />
+          <button v-if="filterQuery" class="btn-clear" @click="filterQuery = ''">✕</button>
+        </div>
       </div>
 
       <div class="status-tabs">
         <button :class="['tab-btn', { active: statusFilter === 'todos' }]" @click="statusFilter = 'todos'">Todos</button>
-        <button :class="['tab-btn', { active: statusFilter === 'disponibles' }]" @click="statusFilter = 'disponibles'">Disponibles</button>
+        <button v-if="isAdmin" :class="['tab-btn', { active: statusFilter === 'disponibles' }]" @click="statusFilter = 'disponibles'">Disponibles</button>
         <button :class="['tab-btn', { active: statusFilter === 'al_dia' }]" @click="statusFilter = 'al_dia'">Al día</button>
         <button :class="['tab-btn', { active: statusFilter === 'en_mora' }]" @click="statusFilter = 'en_mora'">En mora</button>
       </div>
     </div>
 
-    <!-- Cuadrícula 00 al 99 -->
+    <!-- Vista según Perfil: Admin = Cuadrícula 00–99 | Coordinador y Socio = Solo sus boletas (Opción A) -->
     <div v-if="isLoading" class="loading-state">
-      Cargando cuadrícula de la {{ title }}...
+      Cargando boletas de {{ title }}...
+    </div>
+
+    <div v-else-if="!isAdmin" class="readonly-cards-grid">
+      <div v-if="filteredBoard.length === 0" class="loading-state">
+        No hay boletas asignadas con los filtros seleccionados.
+      </div>
+      <div
+        v-for="item in filteredBoard"
+        :key="item.number"
+        :class="['readonly-ticket-card', item.isPaid ? 'paid' : 'unpaid']"
+      >
+        <div class="rt-header">
+          <span class="rt-number">Boleta #{{ item.number }}</span>
+          <span :class="['badge-payment', item.isPaid ? 'paid' : 'unpaid']">
+            {{ item.isPaid ? 'Al día (Pagada)' : 'En mora (Pendiente)' }}
+          </span>
+        </div>
+        <div v-if="item.partner" class="rt-body">
+          <p>
+            <strong>{{ item.partner.fullName }}</strong>
+            <span v-if="item.assigneeType === 'external'" class="badge-ext">Externo</span>
+          </p>
+          <small v-if="item.assigneeType === 'partner'">C.C. {{ item.partner.documentId }} · Tel: {{ item.partner.cellphone }}</small>
+          <small v-else>Tel: {{ item.partner.cellphone }}</small>
+          <small>Coordinador: {{ item.partner.coordinatorName || 'Sin asignar' }}</small>
+        </div>
+      </div>
     </div>
 
     <div v-else class="grid-container">
@@ -429,7 +500,19 @@ onMounted(() => {
 .chip.unpaid { background-color: #feebc8; border: 1px solid #f6ad55; }
 
 .filters-bar { display: flex; justify-content: space-between; align-items: center; gap: 1rem; flex-wrap: wrap; }
-.search-bar { position: relative; flex: 1; min-width: 260px; max-width: 480px; }
+.column-filter-group { display: flex; align-items: center; gap: 0.65rem; flex: 1; min-width: 280px; max-width: 640px; flex-wrap: wrap; }
+.column-select { padding: 0.72rem 0.9rem; border: 1px solid var(--color-border); border-radius: 8px; background: #fff; font-weight: 600; color: var(--color-primary); font-size: 0.88rem; }
+.search-bar { position: relative; flex: 1; min-width: 200px; }
+
+.readonly-cards-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 1rem; }
+.readonly-ticket-card { background: #fff; border: 1px solid var(--color-border); border-radius: 10px; padding: 1.15rem 1.3rem; box-shadow: var(--shadow); display: flex; flex-direction: column; gap: 0.6rem; }
+.readonly-ticket-card.paid { border-left: 5px solid var(--color-secondary); }
+.readonly-ticket-card.unpaid { border-left: 5px solid #dd6b20; }
+.rt-header { display: flex; justify-content: space-between; align-items: center; gap: 0.5rem; }
+.rt-number { font-size: 1.2rem; font-weight: 800; color: var(--color-primary); }
+.rt-body { display: flex; flex-direction: column; gap: 0.25rem; }
+.rt-body p { margin: 0; font-size: 0.95rem; color: #2d3748; }
+.rt-body small { color: #718096; font-size: 0.8rem; }
 .search-bar input { width: 100%; padding: 0.75rem 2.4rem 0.75rem 2.6rem; border: 1px solid var(--color-border); border-radius: 8px; background-color: #fff; outline: none; }
 .search-icon { position: absolute; left: 0.9rem; top: 50%; transform: translateY(-50%); opacity: 0.6; }
 .btn-clear { position: absolute; right: 0.8rem; top: 50%; transform: translateY(-50%); background: none; border: none; cursor: pointer; }

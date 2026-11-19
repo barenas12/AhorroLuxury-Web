@@ -1,5 +1,10 @@
 <script setup lang="ts">
 import { ref, computed, onMounted } from 'vue'
+import { buildScopeQuery, type ViewerUser } from '../utils/viewerScope'
+
+const props = defineProps<{
+  currentUser?: ViewerUser
+}>()
 
 export interface TicketStatusItem {
   number: string
@@ -49,6 +54,7 @@ type SortDirection = 'asc' | 'desc'
 
 const partners = ref<PartnerSavings[]>([])
 const isLoading = ref<boolean>(false)
+const searchColumn = ref<'todas' | 'fullName' | 'documentId' | 'coordinatorName' | 'frequency' | 'savingsStartDate' | 'ticket'>('todas')
 const searchQuery = ref<string>('')
 const statusFilter = ref<'todos' | 'al_dia' | 'en_mora'>('todos')
 const raffleScope = ref<'all' | 'both' | '1' | '2'>('all')
@@ -60,7 +66,8 @@ const sortDirection = ref<SortDirection>('desc')
 const loadSavingsData = async () => {
   isLoading.value = true
   try {
-    const res = await fetch(`${import.meta.env.VITE_API_URL}/api/savings/dashboard`)
+    const qs = buildScopeQuery(props.currentUser)
+    const res = await fetch(`${import.meta.env.VITE_API_URL}/api/savings/dashboard${qs ? `?${qs}` : ''}`)
     const data = await res.json()
     if (data.success) {
       partners.value = data.data
@@ -117,12 +124,30 @@ const filteredPartners = computed(() => {
   }
 
   if (q) {
-    list = list.filter(p =>
-      p.fullName.toLowerCase().includes(q) ||
-      p.documentId.toLowerCase().includes(q) ||
-      p.coordinatorName.toLowerCase().includes(q) ||
-      getScopedTickets(p).some(t => t.number.includes(q))
-    )
+    list = list.filter(p => {
+      switch (searchColumn.value) {
+        case 'fullName':
+          return p.fullName.toLowerCase().includes(q)
+        case 'documentId':
+          return String(p.documentId || '').toLowerCase().includes(q)
+        case 'coordinatorName':
+          return (p.coordinatorName || '').toLowerCase().includes(q)
+        case 'frequency':
+          return getFrequencyLabel(p.frequency).toLowerCase().includes(q) || String(p.frequency).includes(q)
+        case 'savingsStartDate':
+          return (p.savingsStartDate || '').toLowerCase().includes(q)
+        case 'ticket':
+          return getScopedTickets(p).some(t => t.number.includes(q))
+        default:
+          return (
+            p.fullName.toLowerCase().includes(q) ||
+            String(p.documentId || '').toLowerCase().includes(q) ||
+            (p.coordinatorName || '').toLowerCase().includes(q) ||
+            (p.savingsStartDate || '').toLowerCase().includes(q) ||
+            getScopedTickets(p).some(t => t.number.includes(q))
+          )
+      }
+    })
   }
 
   return [...list].sort((a, b) => {
@@ -224,14 +249,26 @@ onMounted(() => {
     <!-- Filtros -->
     <div class="filters-panel">
       <div class="filters-bar">
-        <div class="search-box">
-          <span class="search-icon">🔍</span>
-          <input
-            type="text"
-            v-model="searchQuery"
-            placeholder="Buscar por socio, cédula, coordinador o boleta..."
-          />
-          <button v-if="searchQuery" class="btn-clear" @click="searchQuery = ''">✕</button>
+        <div class="column-filter-group">
+          <select v-model="searchColumn" class="column-select" @change="searchQuery = ''">
+            <option value="todas">Columna: Todas</option>
+            <option value="fullName">Socio (Nombre)</option>
+            <option value="documentId">Cédula</option>
+            <option value="coordinatorName">Coordinador</option>
+            <option value="frequency">Frecuencia</option>
+            <option value="savingsStartDate">Inicio Ahorro</option>
+            <option value="ticket">Boleta</option>
+          </select>
+
+          <div class="search-box">
+            <span class="search-icon">🔍</span>
+            <input
+              type="text"
+              v-model="searchQuery"
+              placeholder="Escribe el valor a filtrar..."
+            />
+            <button v-if="searchQuery" class="btn-clear" @click="searchQuery = ''">✕</button>
+          </div>
         </div>
 
         <div class="status-tabs">
@@ -385,7 +422,9 @@ onMounted(() => {
 
 .filters-panel { display: flex; flex-direction: column; gap: 0.9rem; }
 .filters-bar { display: flex; justify-content: space-between; align-items: center; gap: 1rem; flex-wrap: wrap; }
-.search-box { position: relative; flex: 1; min-width: 260px; max-width: 480px; }
+.column-filter-group { display: flex; align-items: center; gap: 0.65rem; flex: 1; min-width: 280px; max-width: 640px; flex-wrap: wrap; }
+.column-select { padding: 0.72rem 0.9rem; border: 1px solid var(--color-border); border-radius: 8px; background: #fff; font-weight: 600; color: var(--color-primary); font-size: 0.88rem; }
+.search-box { position: relative; flex: 1; min-width: 200px; }
 .search-box input { width: 100%; padding: 0.75rem 2.4rem 0.75rem 2.6rem; border: 1px solid var(--color-border); border-radius: 8px; background-color: #fff; }
 .search-icon { position: absolute; left: 0.9rem; top: 50%; transform: translateY(-50%); opacity: 0.6; }
 .btn-clear { position: absolute; right: 0.8rem; top: 50%; transform: translateY(-50%); background: none; border: none; cursor: pointer; }

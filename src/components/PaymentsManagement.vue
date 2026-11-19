@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { ref, computed, onMounted, nextTick } from 'vue'
 import ReceiptTicket, { type TicketData } from './ReceiptTicket.vue'
+import { buildScopeQuery, isAdminUser, type ViewerUser } from '../utils/viewerScope'
 
 export interface ConsolidatedReceiptItem {
   id: number
@@ -93,16 +94,13 @@ type PaymentSortKey =
 type SortDirection = 'asc' | 'desc'
 
 const props = defineProps<{
-  currentUser: {
-    id: number
-    name?: string
-    full_name?: string
-    user?: string
-  }
+  currentUser: ViewerUser & { id: number }
 }>()
 
+const isAdmin = computed(() => isAdminUser(props.currentUser))
 const receipts = ref<ConsolidatedReceiptRecord[]>([])
 const payers = ref<PayerOption[]>([])
+const searchColumn = ref<'todas' | 'partnerName' | 'partnerDocument' | 'conceptsSummary' | 'paymentDate' | 'registeredByName' | 'ticket'>('todas')
 const searchQuery = ref('')
 const methodFilter = ref<string>('todos')
 const sortKey = ref<PaymentSortKey>('id')
@@ -174,16 +172,24 @@ const getAvailableTicketsForRow = (currentIndex: number): PayerTicketOption[] =>
 const loadData = async (): Promise<void> => {
   isLoading.value = true
   try {
-    const [resReceipts, resPartners] = await Promise.all([
-      fetch(`${import.meta.env.VITE_API_URL}/api/payments/consolidated`),
-      fetch(`${import.meta.env.VITE_API_URL}/api/payments/partners`)
-    ])
+    const qs = buildScopeQuery(props.currentUser)
+    const requests: Promise<Response>[] = [
+      fetch(`${import.meta.env.VITE_API_URL}/api/payments/consolidated${qs ? `?${qs}` : ''}`)
+    ]
+    if (isAdmin.value) {
+      requests.push(fetch(`${import.meta.env.VITE_API_URL}/api/payments/partners`))
+    }
 
-    const dataReceipts = await resReceipts.json()
-    const dataPartners = await resPartners.json()
+    const [resReceipts, resPartners] = await Promise.all(requests)
+    if (resReceipts) {
+      const dataReceipts = await resReceipts.json()
+      if (dataReceipts.success) receipts.value = dataReceipts.data
+    }
 
-    if (dataReceipts.success) receipts.value = dataReceipts.data
-    if (dataPartners.success) payers.value = dataPartners.data
+    if (resPartners) {
+      const dataPartners = await resPartners.json()
+      if (dataPartners.success) payers.value = dataPartners.data
+    }
   } catch (err) {
     console.error('Error al cargar pagos:', err)
   } finally {
@@ -355,14 +361,31 @@ const filteredReceipts = computed(() => {
   }
 
   if (q) {
-    list = list.filter(r =>
-      String(r.id).includes(q) ||
-      r.partnerName.toLowerCase().includes(q) ||
-      String(r.partnerDocument || '').toLowerCase().includes(q) ||
-      r.conceptsSummary.toLowerCase().includes(q) ||
-      r.registeredByName.toLowerCase().includes(q) ||
-      r.items.some(it => it.ticketNumber && it.ticketNumber.includes(q))
-    )
+    list = list.filter(r => {
+      switch (searchColumn.value) {
+        case 'partnerName':
+          return r.partnerName.toLowerCase().includes(q)
+        case 'partnerDocument':
+          return String(r.partnerDocument || '').toLowerCase().includes(q)
+        case 'conceptsSummary':
+          return r.conceptsSummary.toLowerCase().includes(q)
+        case 'paymentDate':
+          return (r.paymentDate || '').toLowerCase().includes(q)
+        case 'registeredByName':
+          return (r.registeredByName || '').toLowerCase().includes(q)
+        case 'ticket':
+          return r.items.some(it => it.ticketNumber && it.ticketNumber.includes(q))
+        default:
+          return (
+            r.partnerName.toLowerCase().includes(q) ||
+            String(r.partnerDocument || '').toLowerCase().includes(q) ||
+            r.conceptsSummary.toLowerCase().includes(q) ||
+            (r.paymentDate || '').toLowerCase().includes(q) ||
+            (r.registeredByName || '').toLowerCase().includes(q) ||
+            r.items.some(it => it.ticketNumber && it.ticketNumber.includes(q))
+          )
+      }
+    })
   }
 
   return [...list].sort((a, b) => {
@@ -553,7 +576,7 @@ onMounted(() => {
         <h2>Control de Pagos & Multas</h2>
         <p>Historial consolidado por recibo único, abonos, boletas (socios y externos) y recargos por mora.</p>
       </div>
-      <button type="button" class="btn-create" @click="openCreateModal">
+      <button v-if="isAdmin" type="button" class="btn-create" @click="openCreateModal">
         <span class="plus-icon">+</span> Registrar Abono
       </button>
     </div>
@@ -584,14 +607,26 @@ onMounted(() => {
 
     <!-- Filtros -->
     <div class="filters-bar">
-      <div class="search-box">
-        <span class="search-icon">🔍</span>
-        <input
-          type="text"
-          v-model="searchQuery"
-          placeholder="Buscar por N° recibo, socio/externo, boleta, documento o concepto..."
-        />
-        <button v-if="searchQuery" class="btn-clear" @click="searchQuery = ''">✕</button>
+      <div class="column-filter-group">
+        <select v-model="searchColumn" class="column-select" @change="searchQuery = ''">
+          <option value="todas">Columna: Todas</option>
+          <option value="partnerName">Socio / Externo</option>
+          <option value="partnerDocument">Documento / Tel</option>
+          <option value="conceptsSummary">Conceptos</option>
+          <option value="paymentDate">Fecha Imputada</option>
+          <option value="registeredByName">Registrado Por</option>
+          <option value="ticket">Boleta</option>
+        </select>
+
+        <div class="search-box">
+          <span class="search-icon">🔍</span>
+          <input
+            type="text"
+            v-model="searchQuery"
+            placeholder="Escribe el valor a filtrar..."
+          />
+          <button v-if="searchQuery" class="btn-clear" @click="searchQuery = ''">✕</button>
+        </div>
       </div>
 
       <div class="method-tabs">
@@ -601,12 +636,11 @@ onMounted(() => {
       </div>
     </div>
 
-    <!-- Tabla Consolidada (1 fila por recibo único + botón manual PDF) -->
+    <!-- Tabla Consolidada (1 fila por recibo único + botón manual PDF, sin columna Recibo #) -->
     <div class="table-container">
       <table>
         <thead>
           <tr>
-            <th><button type="button" class="sort-header" @click="togglePaymentSort('id')">Recibo #{{ paymentSortIndicator('id') }}</button></th>
             <th><button type="button" class="sort-header" @click="togglePaymentSort('partner')">Socio / Externo{{ paymentSortIndicator('partner') }}</button></th>
             <th><button type="button" class="sort-header" @click="togglePaymentSort('concept')">Conceptos{{ paymentSortIndicator('concept') }}</button></th>
             <th><button type="button" class="sort-header" @click="togglePaymentSort('method')">Medio{{ paymentSortIndicator('method') }}</button></th>
@@ -620,15 +654,12 @@ onMounted(() => {
         </thead>
         <tbody>
           <tr v-if="isLoading">
-            <td colspan="10" class="center-text">Cargando comprobantes consolidados...</td>
+            <td colspan="9" class="center-text">Cargando comprobantes consolidados...</td>
           </tr>
           <tr v-else-if="filteredReceipts.length === 0">
-            <td colspan="10" class="center-text empty-state">No se registraron movimientos con los filtros actuales.</td>
+            <td colspan="9" class="center-text empty-state">No se registraron movimientos con los filtros actuales.</td>
           </tr>
           <tr v-for="rec in filteredReceipts" :key="rec.id">
-            <td>
-              <span class="receipt-id-badge">#{{ rec.id }}</span>
-            </td>
             <td>
               <strong>{{ rec.partnerName }}</strong>
               <small class="sub-text">
@@ -921,7 +952,9 @@ onMounted(() => {
 .stat-desc { font-size: 0.75rem; color: #a0aec0; }
 
 .filters-bar { display: flex; justify-content: space-between; align-items: center; gap: 1rem; flex-wrap: wrap; }
-.search-box { position: relative; flex: 1; min-width: 260px; max-width: 480px; }
+.column-filter-group { display: flex; align-items: center; gap: 0.65rem; flex: 1; min-width: 280px; max-width: 640px; flex-wrap: wrap; }
+.column-select { padding: 0.72rem 0.9rem; border: 1px solid var(--color-border); border-radius: 8px; background: #fff; font-weight: 600; color: var(--color-primary); font-size: 0.88rem; }
+.search-box { position: relative; flex: 1; min-width: 200px; }
 .search-box input { width: 100%; padding: 0.75rem 2.4rem 0.75rem 2.6rem; border: 1px solid var(--color-border); border-radius: 8px; background: #fff; }
 .search-icon { position: absolute; left: 0.9rem; top: 50%; transform: translateY(-50%); opacity: 0.6; }
 .btn-clear { position: absolute; right: 0.8rem; top: 50%; transform: translateY(-50%); background: none; border: none; cursor: pointer; }

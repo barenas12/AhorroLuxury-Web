@@ -33,6 +33,8 @@ const isSaving = ref(false)
 const modalError = ref('')
 const sortKey = ref<EgressSortKey>('paymentDate')
 const sortDirection = ref<SortDirection>('desc')
+const searchColumn = ref<'todas' | 'concept' | 'recipient' | 'paymentDate' | 'paymentMethod' | 'observations' | 'registeredByName'>('todas')
+const searchQuery = ref('')
 
 const today = new Date().toISOString().substring(0, 10)
 
@@ -127,14 +129,47 @@ const formatCurrency = (val: number) => {
 
 const formatDate = (dateString: string) => dateString ? String(dateString).substring(0, 10) : ''
 
-const sortedEgresses = computed(() => [...egresses.value].sort((a, b) => {
-  const first = getEgressSortValue(a, sortKey.value)
-  const second = getEgressSortValue(b, sortKey.value)
-  const comparison = typeof first === 'number' && typeof second === 'number'
-    ? first - second
-    : String(first).localeCompare(String(second), 'es', { numeric: true, sensitivity: 'base' })
-  return sortDirection.value === 'asc' ? comparison : -comparison
-}))
+const sortedEgresses = computed(() => {
+  let list = egresses.value
+  const q = searchQuery.value.toLowerCase().trim()
+
+  if (q) {
+    list = list.filter(e => {
+      switch (searchColumn.value) {
+        case 'concept':
+          return (e.concept || '').toLowerCase().includes(q)
+        case 'recipient':
+          return (e.recipient || '').toLowerCase().includes(q)
+        case 'paymentDate':
+          return formatDate(e.paymentDate).toLowerCase().includes(q)
+        case 'paymentMethod':
+          return (e.paymentMethod || '').toLowerCase().includes(q)
+        case 'observations':
+          return (e.observations || '').toLowerCase().includes(q)
+        case 'registeredByName':
+          return (e.registeredByName || '').toLowerCase().includes(q)
+        default:
+          return (
+            (e.concept || '').toLowerCase().includes(q) ||
+            (e.recipient || '').toLowerCase().includes(q) ||
+            formatDate(e.paymentDate).toLowerCase().includes(q) ||
+            (e.paymentMethod || '').toLowerCase().includes(q) ||
+            (e.observations || '').toLowerCase().includes(q) ||
+            (e.registeredByName || '').toLowerCase().includes(q)
+          )
+      }
+    })
+  }
+
+  return [...list].sort((a, b) => {
+    const first = getEgressSortValue(a, sortKey.value)
+    const second = getEgressSortValue(b, sortKey.value)
+    const comparison = typeof first === 'number' && typeof second === 'number'
+      ? first - second
+      : String(first).localeCompare(String(second), 'es', { numeric: true, sensitivity: 'base' })
+    return sortDirection.value === 'asc' ? comparison : -comparison
+  })
+})
 
 const getEgressSortValue = (egress: EgressRecord, key: EgressSortKey): number | string => {
   switch (key) {
@@ -176,6 +211,26 @@ onMounted(() => {
       <button type="button" class="btn-create" @click="openModal">
         <span>-</span> Registrar Egreso
       </button>
+    </div>
+
+    <div class="filters-bar">
+      <div class="column-filter-group">
+        <select v-model="searchColumn" class="column-select" @change="searchQuery = ''">
+          <option value="todas">Columna: Todas</option>
+          <option value="concept">Concepto</option>
+          <option value="recipient">Beneficiario</option>
+          <option value="paymentDate">Fecha</option>
+          <option value="paymentMethod">Medio</option>
+          <option value="observations">Observaciones</option>
+          <option value="registeredByName">Registrado Por</option>
+        </select>
+
+        <div class="search-box">
+          <span class="search-icon">🔍</span>
+          <input type="text" v-model="searchQuery" placeholder="Escribe el valor a filtrar..." />
+          <button v-if="searchQuery" class="btn-clear" @click="searchQuery = ''">✕</button>
+        </div>
+      </div>
     </div>
 
     <div class="table-container">
@@ -308,6 +363,14 @@ onMounted(() => {
 .view-header p { color: var(--color-muted); margin-top: 0.2rem; }
 .btn-create { background-color: #e53e3e; color: #fff; border: none; padding: 0.75rem 1.4rem; border-radius: 8px; font-weight: 700; cursor: pointer; display: flex; gap: 0.4rem; transition: 0.2s; }
 .btn-create:hover { background-color: #c53030; }
+
+.filters-bar { display: flex; justify-content: space-between; align-items: center; gap: 1rem; flex-wrap: wrap; }
+.column-filter-group { display: flex; align-items: center; gap: 0.65rem; flex: 1; min-width: 280px; max-width: 640px; flex-wrap: wrap; }
+.column-select { padding: 0.72rem 0.9rem; border: 1px solid var(--color-border); border-radius: 8px; background: #fff; font-weight: 600; color: var(--color-primary); font-size: 0.88rem; }
+.search-box { position: relative; flex: 1; min-width: 200px; }
+.search-box input { width: 100%; padding: 0.75rem 2.4rem 0.75rem 2.6rem; border: 1px solid var(--color-border); border-radius: 8px; background: #fff; }
+.search-icon { position: absolute; left: 0.9rem; top: 50%; transform: translateY(-50%); opacity: 0.6; }
+.btn-clear { position: absolute; right: 0.8rem; top: 50%; transform: translateY(-50%); background: none; border: none; cursor: pointer; }
 
 .table-container { background: #fff; border-radius: 8px; border: 1px solid var(--color-border); overflow-x: auto; }
 table { width: 100%; border-collapse: collapse; text-align: left; }

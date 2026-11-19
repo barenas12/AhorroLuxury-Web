@@ -1,5 +1,12 @@
 <script setup lang="ts">
 import { ref, computed, onMounted } from 'vue'
+import { buildScopeQuery, isAdminUser, type ViewerUser } from '../utils/viewerScope'
+
+const props = defineProps<{
+  currentUser?: ViewerUser
+}>()
+
+const isAdmin = computed(() => isAdminUser(props.currentUser))
 
 export interface PartnerUser {
   id: number
@@ -30,6 +37,7 @@ export interface CoordinatorOption {
 
 const users = ref<PartnerUser[]>([])
 const coordinators = ref<CoordinatorOption[]>([])
+const searchColumn = ref<'todas' | 'fullName' | 'documentId' | 'cellphone' | 'frequency' | 'ticket' | 'ticket2' | 'coordinatorName' | 'profile'>('todas')
 const searchQuery = ref<string>('')
 const statusFilter = ref<string>('todos')
 const isLoading = ref<boolean>(false)
@@ -85,8 +93,9 @@ const parseTickets = (raw: string | string[] | undefined): string[] => {
 const loadData = async (): Promise<void> => {
   isLoading.value = true
   try {
+    const qs = buildScopeQuery(props.currentUser)
     const [resUsers, resCoords] = await Promise.all([
-      fetch(`${import.meta.env.VITE_API_URL}/api/users`),
+      fetch(`${import.meta.env.VITE_API_URL}/api/users${qs ? `?${qs}` : ''}`),
       fetch(`${import.meta.env.VITE_API_URL}/api/users/coordinators`)
     ])
 
@@ -102,7 +111,13 @@ const loadData = async (): Promise<void> => {
   }
 }
 
-// Búsqueda y filtrado
+const getProfileName = (profile: number): string => {
+  if (Number(profile) === 1) return 'Administrador'
+  if (Number(profile) === 2) return 'Coordinador'
+  return 'Socio'
+}
+
+// Búsqueda y filtrado por columna seleccionada (o Todas)
 const filteredUsers = computed(() => {
   let list = users.value
   const q = searchQuery.value.toLowerCase().trim()
@@ -114,13 +129,36 @@ const filteredUsers = computed(() => {
   }
 
   if (q) {
-    list = list.filter(u =>
-      u.fullName.toLowerCase().includes(q) ||
-      u.documentId.toLowerCase().includes(q) ||
-      u.coordinatorName.toLowerCase().includes(q) ||
-      parseTickets(u.ticket).some(t => t.includes(q)) ||
-      parseTickets(u.ticket2).some(t => t.includes(q))
-    )
+    list = list.filter(u => {
+      switch (searchColumn.value) {
+        case 'fullName':
+          return u.fullName.toLowerCase().includes(q)
+        case 'documentId':
+          return String(u.documentId || '').toLowerCase().includes(q)
+        case 'cellphone':
+          return String(u.cellphone || '').toLowerCase().includes(q)
+        case 'frequency':
+          return getFrequencyLabel(Number(u.frequency)).toLowerCase().includes(q) || String(u.frequency).includes(q)
+        case 'ticket':
+          return parseTickets(u.ticket).some(t => t.includes(q))
+        case 'ticket2':
+          return parseTickets(u.ticket2).some(t => t.includes(q))
+        case 'coordinatorName':
+          return (u.coordinatorName || '').toLowerCase().includes(q)
+        case 'profile':
+          return getProfileName(Number(u.profile)).toLowerCase().includes(q)
+        default:
+          return (
+            u.fullName.toLowerCase().includes(q) ||
+            String(u.documentId || '').toLowerCase().includes(q) ||
+            String(u.cellphone || '').toLowerCase().includes(q) ||
+            (u.coordinatorName || '').toLowerCase().includes(q) ||
+            getProfileName(Number(u.profile)).toLowerCase().includes(q) ||
+            parseTickets(u.ticket).some(t => t.includes(q)) ||
+            parseTickets(u.ticket2).some(t => t.includes(q))
+          )
+      }
+    })
   }
   return list
 })
@@ -330,7 +368,7 @@ onMounted(() => {
         <h2>Gestión de Socios & Usuarios</h2>
         <p>Administración general, asignación de rifas, fecha de inicio de ahorro y perfiles de acceso.</p>
       </div>
-      <button type="button" class="btn-create" @click="openCreateModal">
+      <button v-if="isAdmin" type="button" class="btn-create" @click="openCreateModal">
         <span>+</span> Registrar Socio
       </button>
     </div>
@@ -353,14 +391,28 @@ onMounted(() => {
 
     <!-- Barra de Filtros -->
     <div class="filters-bar">
-      <div class="search-box">
-        <span class="search-icon">🔍</span>
-        <input
-          type="text"
-          v-model="searchQuery"
-          placeholder="Buscar por nombre, cédula, boleta o coordinador..."
-        />
-        <button v-if="searchQuery" class="btn-clear" @click="searchQuery = ''">✕</button>
+      <div class="column-filter-group">
+        <select v-model="searchColumn" class="column-select" @change="searchQuery = ''">
+          <option value="todas">Columna: Todas</option>
+          <option value="fullName">Socio (Nombre)</option>
+          <option value="documentId">Cédula</option>
+          <option value="cellphone">Celular</option>
+          <option value="frequency">Frecuencia</option>
+          <option value="ticket">Boleta Rifa 1</option>
+          <option value="ticket2">Boleta Rifa 2</option>
+          <option value="coordinatorName">Coordinador</option>
+          <option value="profile">Perfil</option>
+        </select>
+
+        <div class="search-box">
+          <span class="search-icon">🔍</span>
+          <input
+            type="text"
+            v-model="searchQuery"
+            placeholder="Escribe el valor a filtrar..."
+          />
+          <button v-if="searchQuery" class="btn-clear" @click="searchQuery = ''">✕</button>
+        </div>
       </div>
 
       <div class="status-tabs">
@@ -399,21 +451,21 @@ onMounted(() => {
             <th>Rifa 2</th>
             <th>Coordinador</th>
             <th>Estado</th>
-            <th>Acciones</th>
+            <th v-if="isAdmin">Acciones</th>
           </tr>
         </thead>
         <tbody>
           <tr v-if="isLoading">
-            <td colspan="10" class="center-text">Cargando socios...</td>
+            <td :colspan="isAdmin ? 10 : 9" class="center-text">Cargando socios...</td>
           </tr>
           <tr v-else-if="filteredUsers.length === 0">
-            <td colspan="10" class="center-text empty-state">No se encontraron socios con los filtros actuales.</td>
+            <td :colspan="isAdmin ? 10 : 9" class="center-text empty-state">No se encontraron socios con los filtros actuales.</td>
           </tr>
           <tr v-for="u in filteredUsers" :key="u.id" :class="{ 'row-inactive': u.partnerStatus === 0 }">
             <td>
               <strong>{{ u.fullName }}</strong>
               <small class="sub-text">
-                Perfil: {{ u.profile === 1 ? 'Admin' : u.profile === 2 ? 'Coord' : 'Usuario' }}
+                Perfil: {{ getProfileName(Number(u.profile)) }}
               </small>
             </td>
             <td>{{ u.documentId }}</td>
@@ -452,7 +504,7 @@ onMounted(() => {
                 {{ u.partnerStatus === 1 ? 'Activo' : 'Inactivo' }}
               </span>
             </td>
-            <td>
+            <td v-if="isAdmin">
               <div class="action-buttons">
                 <button type="button" class="btn-action edit" @click="openEditModal(u)" title="Editar Socio">✏️</button>
                 <button
@@ -544,9 +596,9 @@ onMounted(() => {
             <div class="field">
               <label>Perfil en el Sistema</label>
               <select v-model="form.profile">
-                <option :value="1">Administrador (1)</option>
-                <option :value="2">Coordinador (2)</option>
-                <option :value="3">Socio Ahorrador (3)</option>
+                <option :value="1">Administrador</option>
+                <option :value="2">Coordinador</option>
+                <option :value="3">Socio</option>
               </select>
             </div>
 
@@ -634,8 +686,10 @@ onMounted(() => {
 .stat-label { font-size: 0.85rem; color: var(--color-muted); font-weight: 600; }
 .stat-value { font-size: 1.55rem; color: var(--color-primary); }
 
-.filters-bar { display: flex; justify-content: space-between; align-items: center; gap: 1.5rem; flex-wrap: wrap; }
-.search-box { position: relative; flex: 1; max-width: 480px; }
+.filters-bar { display: flex; justify-content: space-between; align-items: center; gap: 1rem; flex-wrap: wrap; }
+.column-filter-group { display: flex; align-items: center; gap: 0.65rem; flex: 1; min-width: 280px; max-width: 640px; flex-wrap: wrap; }
+.column-select { padding: 0.72rem 0.9rem; border: 1px solid var(--color-border); border-radius: 8px; background: #fff; font-weight: 600; color: var(--color-primary); font-size: 0.88rem; }
+.search-box { position: relative; flex: 1; min-width: 200px; }
 .search-box input { width: 100%; padding: 0.75rem 2.4rem 0.75rem 2.6rem; border: 1px solid var(--color-border); border-radius: 8px; background-color: #fff; }
 .search-icon { position: absolute; left: 0.9rem; top: 50%; transform: translateY(-50%); opacity: 0.6; }
 .btn-clear { position: absolute; right: 0.8rem; top: 50%; transform: translateY(-50%); background: none; border: none; cursor: pointer; }

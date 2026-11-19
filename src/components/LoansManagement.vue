@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { ref, computed, onMounted, nextTick, watch } from 'vue'
 import LoanReceipt, { type LoanReceiptData } from './LoanReceipt.vue'
+import { buildScopeQuery, isAdminUser, type ViewerUser } from '../utils/viewerScope'
 
 export interface LoanRecord {
   id: number
@@ -60,12 +61,14 @@ type LoanSortKey =
 type SortDirection = 'asc' | 'desc'
 
 const props = defineProps<{
-  currentUser: { id: number, name?: string, user?: string, username?: string }
+  currentUser: ViewerUser & { id: number }
 }>()
 
+const isAdmin = computed(() => isAdminUser(props.currentUser))
 const loans = ref<LoanRecord[]>([])
 const partners = ref<{ id: number, fullName: string, documentId: string }[]>([])
 const isLoading = ref(false)
+const searchColumn = ref<'todas' | 'partnerName' | 'documentId' | 'guarantee' | 'deliveryDate' | 'registeredByName'>('todas')
 const searchQuery = ref('')
 const statusFilter = ref<'Activo' | 'Pagado' | 'Todos'>('Activo')
 const sortKey = ref<LoanSortKey>('id')
@@ -153,15 +156,23 @@ const initialInterestPreview = computed(() =>
 const loadData = async () => {
   isLoading.value = true
   try {
-    const [resLoans, resPartners] = await Promise.all([
-      fetch(`${import.meta.env.VITE_API_URL}/api/loans`),
-      fetch(`${import.meta.env.VITE_API_URL}/api/payments/partners?onlyPartners=1`)
-    ])
-    const dataLoans = await resLoans.json()
-    const dataPartners = await resPartners.json()
+    const qs = buildScopeQuery(props.currentUser)
+    const requests: Promise<Response>[] = [
+      fetch(`${import.meta.env.VITE_API_URL}/api/loans${qs ? `?${qs}` : ''}`)
+    ]
+    if (isAdmin.value) {
+      requests.push(fetch(`${import.meta.env.VITE_API_URL}/api/payments/partners?onlyPartners=1`))
+    }
+    const [resLoans, resPartners] = await Promise.all(requests)
+    if (resLoans) {
+      const dataLoans = await resLoans.json()
+      if (dataLoans.success) loans.value = dataLoans.data
+    }
 
-    if (dataLoans.success) loans.value = dataLoans.data
-    if (dataPartners.success) partners.value = dataPartners.data
+    if (resPartners) {
+      const dataPartners = await resPartners.json()
+      if (dataPartners.success) partners.value = dataPartners.data
+    }
   } catch (err) {
     console.error('Error al cargar préstamos:', err)
   } finally {
@@ -176,7 +187,28 @@ const filteredLoans = computed(() => {
   }
   const q = searchQuery.value.toLowerCase().trim()
   if (q) {
-    list = list.filter(l => l.partnerName.toLowerCase().includes(q) || String(l.documentId).includes(q))
+    list = list.filter(l => {
+      switch (searchColumn.value) {
+        case 'partnerName':
+          return l.partnerName.toLowerCase().includes(q)
+        case 'documentId':
+          return String(l.documentId || '').toLowerCase().includes(q)
+        case 'guarantee':
+          return (l.guarantee || '').toLowerCase().includes(q)
+        case 'deliveryDate':
+          return formatDate(l.deliveryDate).toLowerCase().includes(q)
+        case 'registeredByName':
+          return (l.registeredByName || '').toLowerCase().includes(q)
+        default:
+          return (
+            l.partnerName.toLowerCase().includes(q) ||
+            String(l.documentId || '').toLowerCase().includes(q) ||
+            (l.guarantee || '').toLowerCase().includes(q) ||
+            formatDate(l.deliveryDate).toLowerCase().includes(q) ||
+            (l.registeredByName || '').toLowerCase().includes(q)
+          )
+      }
+    })
   }
   return [...list].sort((a, b) => {
     const first = getLoanSortValue(a, sortKey.value)
@@ -499,7 +531,7 @@ onMounted(() => {
         <h2>Préstamos & Respaldos</h2>
         <p>Control de capital prestado, intereses flexibles (7% por defecto), tiempo en mora y comprobantes consolidados.</p>
       </div>
-      <button type="button" class="btn-create" @click="openCreateModal">
+      <button v-if="isAdmin" type="button" class="btn-create" @click="openCreateModal">
         <span>+</span> Entregar Préstamo
       </button>
     </div>
@@ -523,9 +555,21 @@ onMounted(() => {
     </div>
 
     <div class="filters-bar">
-      <div class="search-box">
-        <span class="search-icon">🔍</span>
-        <input type="text" v-model="searchQuery" placeholder="Buscar socio o cédula..." />
+      <div class="column-filter-group">
+        <select v-model="searchColumn" class="column-select" @change="searchQuery = ''">
+          <option value="todas">Columna: Todas</option>
+          <option value="partnerName">Socio (Nombre)</option>
+          <option value="documentId">Cédula</option>
+          <option value="guarantee">Garantía</option>
+          <option value="deliveryDate">Fecha Entrega</option>
+          <option value="registeredByName">Responsable</option>
+        </select>
+
+        <div class="search-box">
+          <span class="search-icon">🔍</span>
+          <input type="text" v-model="searchQuery" placeholder="Escribe el valor a filtrar..." />
+          <button v-if="searchQuery" class="btn-clear" @click="searchQuery = ''">✕</button>
+        </div>
       </div>
       <div class="method-tabs">
         <button :class="['tab-btn', { active: statusFilter === 'Todos' }]" @click="statusFilter = 'Todos'">Todos</button>
@@ -585,7 +629,7 @@ onMounted(() => {
             <td>
               <div class="actions-cell">
                 <button
-                  v-if="l.status !== 'Pagado'"
+                  v-if="isAdmin && l.status !== 'Pagado'"
                   type="button"
                   class="btn-action-pay"
                   @click="openPayModal(l)"
@@ -593,7 +637,7 @@ onMounted(() => {
                   Abonar
                 </button>
                 <button
-                  v-if="l.status !== 'Pagado'"
+                  v-if="isAdmin && l.status !== 'Pagado'"
                   type="button"
                   class="btn-action-secondary"
                   @click="openEditInterestModal(l)"
@@ -907,10 +951,13 @@ onMounted(() => {
 .stat-value { font-size: 1.55rem; color: var(--color-primary); display: block; margin: 0.3rem 0; }
 .stat-desc { font-size: 0.75rem; color: #a0aec0; }
 
-.filters-bar { display: flex; justify-content: space-between; gap: 1rem; flex-wrap: wrap; }
-.search-box { position: relative; flex: 1; min-width: 240px; max-width: 480px; }
-.search-box input { width: 100%; padding: 0.75rem 1rem 0.75rem 2.6rem; border: 1px solid var(--color-border); border-radius: 8px; }
+.filters-bar { display: flex; justify-content: space-between; align-items: center; gap: 1rem; flex-wrap: wrap; }
+.column-filter-group { display: flex; align-items: center; gap: 0.65rem; flex: 1; min-width: 280px; max-width: 640px; flex-wrap: wrap; }
+.column-select { padding: 0.72rem 0.9rem; border: 1px solid var(--color-border); border-radius: 8px; background: #fff; font-weight: 600; color: var(--color-primary); font-size: 0.88rem; }
+.search-box { position: relative; flex: 1; min-width: 200px; }
+.search-box input { width: 100%; padding: 0.75rem 2.4rem 0.75rem 2.6rem; border: 1px solid var(--color-border); border-radius: 8px; background: #fff; }
 .search-icon { position: absolute; left: 0.9rem; top: 50%; transform: translateY(-50%); opacity: 0.6; }
+.btn-clear { position: absolute; right: 0.8rem; top: 50%; transform: translateY(-50%); background: none; border: none; cursor: pointer; }
 .method-tabs { display: flex; background: #e2e8f0; border-radius: 8px; padding: 0.25rem; }
 .tab-btn { border: none; background: none; padding: 0.55rem 1.2rem; border-radius: 6px; cursor: pointer; font-weight: 600; color: #4a5568; }
 .tab-btn.active { background: #fff; color: var(--color-primary); }
