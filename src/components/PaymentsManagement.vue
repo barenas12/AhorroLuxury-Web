@@ -573,7 +573,7 @@ onMounted(() => {
     <!-- Encabezado -->
     <div class="view-header">
       <div>
-        <h2>Control de Pagos & Multas</h2>
+        <h2>Control de Pagos y Multas</h2>
         <p>Historial consolidado por recibo único, abonos, boletas (socios y externos) y recargos por mora.</p>
       </div>
       <button v-if="isAdmin" type="button" class="btn-create" @click="openCreateModal">

@@ -132,8 +132,14 @@ const filteredPartners = computed(() => {
           return String(p.documentId || '').toLowerCase().includes(q)
         case 'coordinatorName':
           return (p.coordinatorName || '').toLowerCase().includes(q)
-        case 'frequency':
-          return getFrequencyLabel(p.frequency).toLowerCase().includes(q) || String(p.frequency).includes(q)
+        case 'frequency': {
+          const freqNum = Number(p.frequency)
+          const numericQuery = /^\d+$/.test(q) ? Number(q) : null
+          if (numericQuery !== null) {
+            return freqNum === numericQuery
+          }
+          return getFrequencyLabel(freqNum).toLowerCase().includes(q)
+        }
         case 'savingsStartDate':
           return (p.savingsStartDate || '').toLowerCase().includes(q)
         case 'ticket':
@@ -219,7 +225,7 @@ onMounted(() => {
     <!-- Header -->
     <div class="view-header">
       <div>
-        <h2>Ahorro Programado & Mora</h2>
+        <h2>Ahorro Programado y Mora</h2>
         <p>Monitoreo de ahorro neto, cuotas según frecuencia, tiempo en mora y estado independiente de boletas.</p>
       </div>
       <button type="button" class="btn-refresh" @click="loadSavingsData">

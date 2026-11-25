@@ -57,7 +57,7 @@ const menuItems = ref<SidebarItem[]>([
     id: "usuarios",
     label: "Usuarios",
     icon: "/icon/users.png",
-    requiredProfiles: [1, 2],
+    requiredProfiles: [1],
     availabilityKey: "hasUsers",
     isImage: true,
   },

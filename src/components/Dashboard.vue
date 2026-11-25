@@ -27,7 +27,6 @@ const props = defineProps<{
 }>();
 
 const isAdmin = computed(() => Number(props.user.profile) === 1);
-const isCoordinatorOrAdmin = computed(() => Number(props.user.profile) === 1 || Number(props.user.profile) === 2);
 
 const currentUserProps = computed(() => ({
   ...props.user,
@@ -38,9 +37,9 @@ const currentUserProps = computed(() => ({
 <template>
   <div class="dashboard-content">
     <div class="inner-container">
-      <!-- 1. USUARIOS (Admin: edición, Coordinador: solo lectura sus socios) -->
+      <!-- 1. USUARIOS (Exclusivo Administrador) -->
       <UsersManagement
-        v-if="currentSection === 'usuarios' && isCoordinatorOrAdmin"
+        v-if="currentSection === 'usuarios' && isAdmin"
         :currentUser="currentUserProps"
       />
 

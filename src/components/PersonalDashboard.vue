@@ -100,7 +100,7 @@ onMounted(() => {
   <div class="personal-dashboard">
     <header class="dash-header">
       <div>
-        <h2>Mi Resumen — {{ isCoordinator ? 'Coordinador' : 'Socio' }}</h2>
+        <h2>Mi Resumen</h2>
         <p>Bienvenido, <strong>{{ userName }}</strong>. Aquí puedes consultar el estado informativo de tu ahorro{{ isCoordinator ? ' y el de tus socios a cargo' : '' }}.</p>
       </div>
       <button type="button" class="btn-refresh" @click="loadPersonalSummary" :disabled="isLoading">

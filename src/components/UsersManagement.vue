@@ -37,7 +37,7 @@ export interface CoordinatorOption {
 
 const users = ref<PartnerUser[]>([])
 const coordinators = ref<CoordinatorOption[]>([])
-const searchColumn = ref<'todas' | 'fullName' | 'documentId' | 'cellphone' | 'frequency' | 'ticket' | 'ticket2' | 'coordinatorName' | 'profile'>('todas')
+const searchColumn = ref<'todas' | 'fullName' | 'documentId' | 'cellphone' | 'frequency' | 'ticket' | 'ticket2' | 'coordinatorName'>('todas')
 const searchQuery = ref<string>('')
 const statusFilter = ref<string>('todos')
 const isLoading = ref<boolean>(false)
@@ -137,23 +137,26 @@ const filteredUsers = computed(() => {
           return String(u.documentId || '').toLowerCase().includes(q)
         case 'cellphone':
           return String(u.cellphone || '').toLowerCase().includes(q)
-        case 'frequency':
-          return getFrequencyLabel(Number(u.frequency)).toLowerCase().includes(q) || String(u.frequency).includes(q)
+        case 'frequency': {
+          const freqNum = Number(u.frequency)
+          const numericQuery = /^\d+$/.test(q) ? Number(q) : null
+          if (numericQuery !== null) {
+            return freqNum === numericQuery
+          }
+          return getFrequencyLabel(freqNum).toLowerCase().includes(q)
+        }
         case 'ticket':
           return parseTickets(u.ticket).some(t => t.includes(q))
         case 'ticket2':
           return parseTickets(u.ticket2).some(t => t.includes(q))
         case 'coordinatorName':
           return (u.coordinatorName || '').toLowerCase().includes(q)
-        case 'profile':
-          return getProfileName(Number(u.profile)).toLowerCase().includes(q)
         default:
           return (
             u.fullName.toLowerCase().includes(q) ||
             String(u.documentId || '').toLowerCase().includes(q) ||
             String(u.cellphone || '').toLowerCase().includes(q) ||
             (u.coordinatorName || '').toLowerCase().includes(q) ||
-            getProfileName(Number(u.profile)).toLowerCase().includes(q) ||
             parseTickets(u.ticket).some(t => t.includes(q)) ||
             parseTickets(u.ticket2).some(t => t.includes(q))
           )
@@ -365,7 +368,7 @@ onMounted(() => {
     <!-- Cabecera -->
     <div class="view-header">
       <div>
-        <h2>Gestión de Socios & Usuarios</h2>
+        <h2>Gestión de Socios y Usuarios</h2>
         <p>Administración general, asignación de rifas, fecha de inicio de ahorro y perfiles de acceso.</p>
       </div>
       <button v-if="isAdmin" type="button" class="btn-create" @click="openCreateModal">
@@ -401,7 +404,6 @@ onMounted(() => {
           <option value="ticket">Boleta Rifa 1</option>
           <option value="ticket2">Boleta Rifa 2</option>
           <option value="coordinatorName">Coordinador</option>
-          <option value="profile">Perfil</option>
         </select>
 
         <div class="search-box">
@@ -461,7 +463,8 @@ onMounted(() => {
           <tr v-else-if="filteredUsers.length === 0">
             <td :colspan="isAdmin ? 10 : 9" class="center-text empty-state">No se encontraron socios con los filtros actuales.</td>
           </tr>
-          <tr v-for="u in filteredUsers" :key="u.id" :class="{ 'row-inactive': u.partnerStatus === 0 }">
+          <template v-else>
+          <tr v-for="(u, idx) in filteredUsers" :key="`${u.id}-${idx}`" :class="{ 'row-inactive': u.partnerStatus === 0 }">
             <td>
               <strong>{{ u.fullName }}</strong>
               <small class="sub-text">
@@ -519,6 +522,7 @@ onMounted(() => {
               </div>
             </td>
           </tr>
+          </template>
         </tbody>
       </table>
     </div>

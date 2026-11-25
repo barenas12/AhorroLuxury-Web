@@ -528,7 +528,7 @@ onMounted(() => {
   <div class="loans-view">
     <div class="view-header">
       <div>
-        <h2>Préstamos & Respaldos</h2>
+        <h2>Préstamos y Respaldos</h2>
         <p>Control de capital prestado, intereses flexibles (7% por defecto), tiempo en mora y comprobantes consolidados.</p>
       </div>
       <button v-if="isAdmin" type="button" class="btn-create" @click="openCreateModal">
