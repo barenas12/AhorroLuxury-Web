@@ -520,14 +520,14 @@ onMounted(() => {
 </template>
 
 <style scoped>
-.raffle-view { width: 100%; display: flex; flex-direction: column; gap: 1.5rem; }
-.view-header { display: flex; justify-content: space-between; align-items: center; }
-.view-header h2 { color: var(--color-primary); font-size: 1.7rem; margin: 0; }
+.raffle-view { width: 100%; display: flex; flex-direction: column; gap: 1.4rem; min-width: 0; }
+.view-header { display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 1rem; }
+.view-header h2 { color: var(--color-primary); font-size: clamp(1.35rem, 2.5vw, 1.7rem); margin: 0; }
 .view-header p { color: var(--color-muted); font-size: 0.95rem; margin-top: 0.2rem; }
 .btn-refresh { background-color: #ffffff; color: var(--color-primary); border: 1px solid var(--color-border); padding: 0.6rem 1.1rem; border-radius: 8px; font-weight: 700; cursor: pointer; }
 
-.stats-row { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 1.1rem; }
-.stat-card { background: #fff; padding: 1.1rem 1.4rem; border-radius: var(--radius); border: 1px solid var(--color-border); display: flex; flex-direction: column; gap: 0.25rem; box-shadow: var(--shadow); }
+.stats-row { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(200px, 100%), 1fr)); gap: 1rem; }
+.stat-card { background: #fff; padding: 1.1rem 1.35rem; border-radius: var(--radius); border: 1px solid var(--color-border); display: flex; flex-direction: column; gap: 0.25rem; box-shadow: var(--shadow); }
 .stat-card.primary { border-left: 5px solid var(--color-primary); }
 .stat-card.green { border-left: 5px solid var(--color-secondary); }
 .stat-card.paid-card { border-left: 5px solid #dd6b20; }
@@ -542,10 +542,10 @@ onMounted(() => {
 .chip.paid { background-color: #c6f6d5; border: 1px solid #68d391; }
 .chip.unpaid { background-color: #feebc8; border: 1px solid #f6ad55; }
 
-.filters-bar { display: flex; justify-content: space-between; align-items: center; gap: 1rem; flex-wrap: wrap; }
-.column-filter-group { display: flex; align-items: center; gap: 0.65rem; flex: 1; min-width: 280px; max-width: 640px; flex-wrap: wrap; }
-.column-select { padding: 0.72rem 0.9rem; border: 1px solid var(--color-border); border-radius: 8px; background: #fff; font-weight: 600; color: var(--color-primary); font-size: 0.88rem; }
-.search-bar { position: relative; flex: 1; min-width: 200px; }
+.filters-bar { display: flex; justify-content: space-between; align-items: center; gap: 0.85rem; flex-wrap: wrap; }
+.column-filter-group { display: flex; align-items: center; gap: 0.65rem; flex: 1 1 280px; min-width: 0; max-width: 640px; flex-wrap: wrap; }
+.column-select { padding: 0.72rem 0.9rem; border: 1px solid var(--color-border); border-radius: 8px; background: #fff; font-weight: 600; color: var(--color-primary); font-size: 0.88rem; max-width: 100%; }
+.search-bar { position: relative; flex: 1 1 180px; min-width: 0; }
 
 .readonly-cards-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 1rem; }
 .readonly-ticket-card { background: #fff; border: 1px solid var(--color-border); border-radius: 10px; padding: 1.15rem 1.3rem; box-shadow: var(--shadow); display: flex; flex-direction: column; gap: 0.6rem; }
@@ -614,8 +614,22 @@ onMounted(() => {
 .autocomplete-item small { color: #718096; }
 .autocomplete-empty { padding: 0.8rem; text-align: center; color: #718096; font-size: 0.85rem; }
 
-.modal-buttons { display: flex; justify-content: flex-end; gap: 0.8rem; margin-top: 0.5rem; }
+.modal-buttons { display: flex; justify-content: flex-end; gap: 0.8rem; margin-top: 0.5rem; flex-wrap: wrap; }
 .btn-cancel { background: none; border: 1px solid var(--color-border); padding: 0.65rem 1.2rem; border-radius: 6px; cursor: pointer; }
 .btn-save { background: var(--color-secondary); color: #fff; border: none; padding: 0.65rem 1.2rem; border-radius: 6px; font-weight: 700; cursor: pointer; }
 .btn-save:disabled { opacity: 0.5; }
+
+@media (max-width: 720px) {
+  .btn-refresh { width: 100%; }
+  .column-select { width: 100%; }
+  .status-tabs { width: 100%; }
+  .tab-btn { flex: 1; text-align: center; padding: 0.5rem 0.6rem; font-size: 0.82rem; }
+  .grid-container { padding: 0.9rem; gap: 0.5rem; grid-template-columns: repeat(auto-fill, minmax(62px, 1fr)); }
+  .cell-number { font-size: 1.05rem; }
+  .modal-overlay { padding: 0.85rem; }
+  .modal-box { padding: 1.25rem; }
+  .type-selector { grid-template-columns: 1fr; }
+  .modal-buttons { flex-direction: column-reverse; }
+  .modal-buttons button { width: 100%; }
+}
 </style>

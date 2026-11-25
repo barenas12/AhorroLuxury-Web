@@ -136,14 +136,17 @@ const handleSubmit = async () => {
   align-items: center;
   justify-content: center;
   z-index: 9999;
-  padding: 1.5rem;
+  padding: 1rem;
+  overflow-y: auto;
 }
 .modal-card {
   background: #fff;
-  padding: 2.5rem;
+  padding: clamp(1.35rem, 4vw, 2.5rem);
   border-radius: var(--radius);
   max-width: 480px;
   width: 100%;
+  max-height: 92dvh;
+  overflow-y: auto;
   box-shadow: 0 15px 30px rgba(0,0,0,0.3);
 }
 .header {

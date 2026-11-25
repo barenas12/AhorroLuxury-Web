@@ -158,22 +158,66 @@ const visibleMenuItems = computed<SidebarItem[]>(() => {
 });
 
 const isCollapsed = ref<boolean>(false);
+const isMobileOpen = ref<boolean>(false);
+
+const activeSectionLabel = computed<string>(() => {
+  const found = menuItems.value.find((item) => item.id === props.activeSection);
+  return found?.label || "Panel de Gestión";
+});
 
 const toggleSidebar = (): void => {
   isCollapsed.value = !isCollapsed.value;
 };
+
+const selectSection = (sectionId: string): void => {
+  emit("select-section", sectionId);
+  isMobileOpen.value = false;
+};
 </script>
 
 <template>
-  <aside :class="['sidebar', { collapsed: isCollapsed }]">
+  <!-- Barra superior exclusiva para móvil / tablet -->
+  <header class="mobile-topbar">
+    <button
+      type="button"
+      class="mobile-menu-btn"
+      :aria-expanded="isMobileOpen"
+      aria-label="Abrir menú de navegación"
+      @click="isMobileOpen = !isMobileOpen"
+    >
+      {{ isMobileOpen ? "✕" : "☰" }}
+    </button>
+
+    <div class="mobile-topbar-brand">
+      <img src="/img/logo-luxury.png" alt="Ahorro Luxury" class="mobile-logo-image" />
+      <div class="mobile-brand-text">
+        <strong>Ahorro Luxury</strong>
+        <span>{{ activeSectionLabel }}</span>
+      </div>
+    </div>
+
+    <div class="mobile-user-avatar" :title="displayName">{{ userInitial }}</div>
+  </header>
+
+  <!-- Fondo oscuro del drawer en móvil -->
+  <div
+    v-if="isMobileOpen"
+    class="mobile-backdrop"
+    @click="isMobileOpen = false"
+  />
+
+  <aside :class="['sidebar', { collapsed: isCollapsed, 'mobile-open': isMobileOpen }]">
     <div class="sidebar-brand">
       <img src="/img/logo-luxury.png" alt="Ahorro Luxury" class="logo-image" />
       <div class="brand-info">
         <h3>Ahorro Luxury</h3>
         <span class="portal-tag">Panel de Gestión</span>
       </div>
-      <button type="button" class="toggle-sidebar" @click="toggleSidebar">
+      <button type="button" class="toggle-sidebar" @click="toggleSidebar" aria-label="Contraer menú">
         {{ isCollapsed ? ">" : "<" }}
+      </button>
+      <button type="button" class="close-mobile-sidebar" @click="isMobileOpen = false" aria-label="Cerrar menú">
+        ✕
       </button>
     </div>
 
@@ -191,7 +235,7 @@ const toggleSidebar = (): void => {
           <button
             type="button"
             :class="['nav-btn', { active: props.activeSection === item.id }]"
-            @click="emit('select-section', item.id)"
+            @click="selectSection(item.id)"
           >
             <span class="icon">
               <img
@@ -454,27 +498,146 @@ const toggleSidebar = (): void => {
   padding-left: 0.5rem;
   padding-right: 0.5rem;
 }
-@media (max-width: 768px) {
-  .sidebar {
-    width: 72px;
-    flex-basis: 72px;
-    padding-left: 0.75rem;
-    padding-right: 0.75rem;
+.mobile-topbar,
+.mobile-backdrop,
+.close-mobile-sidebar {
+  display: none;
+}
+
+@media (max-width: 900px) {
+  .mobile-topbar {
+    display: flex;
+    align-items: center;
+    gap: 0.85rem;
+    position: sticky;
+    top: 0;
+    z-index: 1100;
+    background-color: #ffffff;
+    border-bottom: 1px solid var(--color-border);
+    padding: 0.75rem 1rem;
+    box-shadow: 0 2px 10px rgba(8, 28, 45, 0.06);
   }
-  .sidebar .brand-info,
-  .sidebar .user-details,
-  .sidebar .label,
-  .sidebar .btn-logout span:not(.icon) {
+  .mobile-menu-btn {
+    width: 42px;
+    height: 42px;
+    border-radius: 10px;
+    border: 1px solid var(--color-border);
+    background: var(--color-bg-light);
+    color: var(--color-primary);
+    font-size: 1.25rem;
+    font-weight: 700;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    flex-shrink: 0;
+  }
+  .mobile-topbar-brand {
+    display: flex;
+    align-items: center;
+    gap: 0.65rem;
+    min-width: 0;
+    flex: 1;
+  }
+  .mobile-logo-image {
+    width: 36px;
+    height: 36px;
+    object-fit: contain;
+    flex-shrink: 0;
+  }
+  .mobile-brand-text {
+    display: flex;
+    flex-direction: column;
+    min-width: 0;
+  }
+  .mobile-brand-text strong {
+    font-size: 0.96rem;
+    color: var(--color-primary);
+    line-height: 1.15;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+  .mobile-brand-text span {
+    font-size: 0.75rem;
+    color: var(--color-muted);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+  .mobile-user-avatar {
+    width: 36px;
+    height: 36px;
+    border-radius: 50%;
+    background-color: var(--color-primary);
+    color: #ffffff;
+    font-weight: 700;
+    font-size: 0.92rem;
+    display: grid;
+    place-content: center;
+    flex-shrink: 0;
+  }
+  .mobile-backdrop {
+    display: block;
+    position: fixed;
+    inset: 0;
+    background: rgba(8, 28, 45, 0.55);
+    z-index: 1150;
+  }
+  .sidebar,
+  .sidebar.collapsed {
+    position: fixed;
+    top: 0;
+    left: 0;
+    bottom: 0;
+    width: min(290px, 84vw);
+    flex: none;
+    height: 100dvh;
+    padding: 1.25rem 1rem;
+    z-index: 1200;
+    transform: translateX(-100%);
+    transition: transform 0.25s ease;
+    box-shadow: 0 18px 38px rgba(8, 28, 45, 0.28);
+  }
+  .sidebar.mobile-open,
+  .sidebar.collapsed.mobile-open {
+    transform: translateX(0);
+  }
+  .sidebar.collapsed .brand-info,
+  .sidebar.collapsed .user-details,
+  .sidebar.collapsed .label,
+  .sidebar.collapsed .btn-logout span:not(.icon) {
+    display: block;
+  }
+  .sidebar.collapsed .sidebar-brand,
+  .sidebar.collapsed .user-chip,
+  .sidebar.collapsed .nav-btn,
+  .sidebar.collapsed .btn-logout {
+    justify-content: flex-start;
+  }
+  .sidebar.collapsed .user-chip {
+    padding: 0.75rem 0.9rem;
+  }
+  .sidebar.collapsed .nav-btn,
+  .sidebar.collapsed .btn-logout {
+    padding: 0.75rem 1rem;
+  }
+  .toggle-sidebar {
     display: none;
   }
-  .sidebar .sidebar-brand,
-  .sidebar .nav-btn,
-  .sidebar .btn-logout {
+  .close-mobile-sidebar {
+    display: inline-flex;
+    align-items: center;
     justify-content: center;
-  }
-  .sidebar .user-chip {
-    justify-content: center;
-    padding: 0.75rem 0.25rem;
+    margin-left: auto;
+    width: 34px;
+    height: 34px;
+    border: 1px solid var(--color-border);
+    border-radius: 8px;
+    background: var(--color-bg-light);
+    color: var(--color-primary);
+    font-size: 1rem;
+    cursor: pointer;
   }
 }
 </style>

@@ -303,6 +303,13 @@ const onPasswordChanged = (): void => {
   display: flex;
   flex: 1;
   min-height: 100vh;
+  min-width: 0;
+}
+
+@media (max-width: 900px) {
+  .dashboard-layout {
+    flex-direction: column;
+  }
 }
 
 /* Toast flotante para avisos de sesión */
@@ -310,6 +317,7 @@ const onPasswordChanged = (): void => {
   position: fixed;
   top: 85px;
   right: 25px;
+  max-width: calc(100vw - 2rem);
   padding: 0.9rem 1.4rem;
   border-radius: var(--radius);
   font-weight: 600;
@@ -318,6 +326,14 @@ const onPasswordChanged = (): void => {
   box-shadow: 0 10px 20px rgba(0, 0, 0, 0.15);
   display: flex;
   align-items: center;
+}
+
+@media (max-width: 640px) {
+  .toast-notification {
+    top: 72px;
+    left: 1rem;
+    right: 1rem;
+  }
 }
 
 .toast-notification.info {

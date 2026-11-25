@@ -97,10 +97,15 @@ const currentUserProps = computed(() => ({
 <style scoped>
 .dashboard-content {
   flex: 1;
-  padding: 2rem 2.5rem;
+  min-width: 0;
+  padding: clamp(1rem, 2.5vw, 2rem) clamp(0.85rem, 2.8vw, 2.5rem);
   background-color: var(--color-bg-light);
   overflow-y: auto;
+  overflow-x: hidden;
   width: 100%;
 }
-.inner-container { width: 100%; }
+.inner-container {
+  width: 100%;
+  min-width: 0;
+}
 </style>

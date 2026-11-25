@@ -935,15 +935,15 @@ onMounted(() => {
 </template>
 
 <style scoped>
-.payments-view { width: 100%; display: flex; flex-direction: column; gap: 1.8rem; }
+.payments-view { width: 100%; display: flex; flex-direction: column; gap: 1.5rem; min-width: 0; }
 .view-header { display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 1rem; }
-.view-header h2 { color: var(--color-primary); font-size: 1.7rem; margin: 0; }
+.view-header h2 { color: var(--color-primary); font-size: clamp(1.35rem, 2.5vw, 1.7rem); margin: 0; }
 .view-header p { color: var(--color-muted); font-size: 0.95rem; margin-top: 0.2rem; }
-.btn-create { background-color: var(--color-secondary); color: #fff; border: none; padding: 0.75rem 1.4rem; border-radius: var(--radius); font-weight: 700; cursor: pointer; display: flex; align-items: center; gap: 0.4rem; box-shadow: 0 4px 12px rgba(31, 122, 99, 0.25); }
+.btn-create { background-color: var(--color-secondary); color: #fff; border: none; padding: 0.75rem 1.4rem; border-radius: var(--radius); font-weight: 700; cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 0.4rem; box-shadow: 0 4px 12px rgba(31, 122, 99, 0.25); }
 .btn-create:hover { opacity: 0.92; transform: translateY(-1px); }
 
-.stats-row { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 1.2rem; }
-.stat-card { background: #fff; padding: 1.3rem 1.6rem; border-radius: var(--radius); border: 1px solid var(--color-border); display: flex; flex-direction: column; gap: 0.25rem; box-shadow: var(--shadow); }
+.stats-row { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(200px, 100%), 1fr)); gap: 1rem; }
+.stat-card { background: #fff; padding: 1.2rem 1.4rem; border-radius: var(--radius); border: 1px solid var(--color-border); display: flex; flex-direction: column; gap: 0.25rem; box-shadow: var(--shadow); }
 .stat-card.primary { border-left: 5px solid var(--color-primary); }
 .stat-card.green { border-left: 5px solid var(--color-secondary); }
 .stat-card.blue { border-left: 5px solid #2b6cb0; }
@@ -952,18 +952,18 @@ onMounted(() => {
 .stat-value { font-size: 1.55rem; color: var(--color-primary); }
 .stat-desc { font-size: 0.75rem; color: #a0aec0; }
 
-.filters-bar { display: flex; justify-content: space-between; align-items: center; gap: 1rem; flex-wrap: wrap; }
-.column-filter-group { display: flex; align-items: center; gap: 0.65rem; flex: 1; min-width: 280px; max-width: 640px; flex-wrap: wrap; }
-.column-select { padding: 0.72rem 0.9rem; border: 1px solid var(--color-border); border-radius: 8px; background: #fff; font-weight: 600; color: var(--color-primary); font-size: 0.88rem; }
-.search-box { position: relative; flex: 1; min-width: 200px; }
+.filters-bar { display: flex; justify-content: space-between; align-items: center; gap: 0.85rem; flex-wrap: wrap; }
+.column-filter-group { display: flex; align-items: center; gap: 0.65rem; flex: 1 1 280px; min-width: 0; max-width: 640px; flex-wrap: wrap; }
+.column-select { padding: 0.72rem 0.9rem; border: 1px solid var(--color-border); border-radius: 8px; background: #fff; font-weight: 600; color: var(--color-primary); font-size: 0.88rem; max-width: 100%; }
+.search-box { position: relative; flex: 1 1 180px; min-width: 0; }
 .search-box input { width: 100%; padding: 0.75rem 2.4rem 0.75rem 2.6rem; border: 1px solid var(--color-border); border-radius: 8px; background: #fff; }
 .search-icon { position: absolute; left: 0.9rem; top: 50%; transform: translateY(-50%); opacity: 0.6; }
 .btn-clear { position: absolute; right: 0.8rem; top: 50%; transform: translateY(-50%); background: none; border: none; cursor: pointer; }
-.method-tabs { display: flex; background: #e2e8f0; border-radius: 8px; padding: 0.25rem; }
-.tab-btn { border: none; background: none; padding: 0.55rem 1.2rem; border-radius: 6px; cursor: pointer; font-weight: 600; color: #4a5568; }
+.method-tabs { display: flex; flex-wrap: wrap; background: #e2e8f0; border-radius: 8px; padding: 0.25rem; max-width: 100%; }
+.tab-btn { border: none; background: none; padding: 0.55rem 1rem; border-radius: 6px; cursor: pointer; font-weight: 600; color: #4a5568; }
 .tab-btn.active { background: #fff; color: var(--color-primary); }
 
-.table-container { width: 100%; background: #fff; border-radius: var(--radius); border: 1px solid var(--color-border); box-shadow: var(--shadow); overflow-x: auto; }
+.table-container { width: 100%; background: #fff; border-radius: var(--radius); border: 1px solid var(--color-border); box-shadow: var(--shadow); overflow-x: auto; -webkit-overflow-scrolling: touch; }
 table { width: 100%; border-collapse: collapse; text-align: left; font-size: 0.9rem; }
 th, td { padding: 0.9rem 1rem; border-bottom: 1px solid var(--color-border); white-space: nowrap; }
 th { background-color: var(--color-bg-light); color: var(--color-primary); font-size: 0.82rem; text-transform: uppercase; }
@@ -1045,8 +1045,23 @@ th { background-color: var(--color-bg-light); color: var(--color-primary); font-
 .fine-text { color: #c53030; font-weight: 600; }
 .total-row { border-top: 1px solid var(--color-border); padding-top: 0.6rem; margin-top: 0.3rem; font-size: 1.15rem; color: var(--color-secondary); }
 
-.modal-buttons { display: flex; justify-content: flex-end; gap: 1rem; margin-top: 0.5rem; }
+.modal-buttons { display: flex; justify-content: flex-end; gap: 1rem; margin-top: 0.5rem; flex-wrap: wrap; }
 .btn-cancel { background: none; border: 1px solid var(--color-border); padding: 0.7rem 1.4rem; border-radius: 6px; cursor: pointer; }
 .btn-save { background: var(--color-secondary); color: #fff; border: none; padding: 0.7rem 1.4rem; border-radius: 6px; font-weight: 700; cursor: pointer; }
 .btn-save:disabled { opacity: 0.5; }
+
+@media (max-width: 720px) {
+  .modal-overlay { padding: 0.85rem; }
+  .modal-box { padding: 1.25rem; }
+  .concepts-card-header { flex-wrap: wrap; gap: 0.6rem; }
+  .column-select { width: 100%; }
+  .method-tabs { width: 100%; }
+  .tab-btn { flex: 1; text-align: center; padding: 0.55rem 0.65rem; }
+  .btn-create { width: 100%; }
+  .partner-info-banner { flex-direction: column; align-items: stretch; }
+  .btn-al-dia { width: 100%; text-align: center; }
+  .fine-input-inline { max-width: 100%; }
+  .modal-buttons { flex-direction: column-reverse; }
+  .modal-buttons button { width: 100%; }
+}
 </style>
