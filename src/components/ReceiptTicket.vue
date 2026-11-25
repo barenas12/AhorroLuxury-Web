@@ -1,7 +1,5 @@
 <script setup lang="ts">
-import { ref, nextTick } from 'vue'
-
-import html2pdf from 'html2pdf.js'
+import { jsPDF } from 'jspdf'
 
 export interface TicketItem {
   concept: string
@@ -11,6 +9,7 @@ export interface TicketItem {
 
 export interface TicketData {
   id: string
+  loanId?: string | null
   date: string
   partnerName: string
   documentId: string
@@ -23,38 +22,232 @@ const props = defineProps<{
   ticketData: TicketData | null
 }>()
 
-const ticketElement = ref<HTMLElement | null>(null)
+const sanitizeFilename = (value: string): string =>
+  value
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .replace(/[<>:"/\\|?*\u0000-\u001f]/g, '')
+    .trim()
+    .replace(/\s+/g, '_')
 
-const sanitizeFilename = (value: string): string => value
-  .normalize('NFD')
-  .replace(/[\u0300-\u036f]/g, '')
-  .replace(/[<>:"/\\|?*\u0000-\u001f]/g, '')
-  .trim()
-  .replace(/\s+/g, '_')
+const formatCurrency = (val: number): string =>
+  new Intl.NumberFormat('es-CO', {
+    style: 'currency',
+    currency: 'COP',
+    maximumFractionDigits: 0
+  }).format(Number(val) || 0)
+
+interface LoadedLogo {
+  dataUrl: string
+  width: number
+  height: number
+}
+
+const loadLogoImage = (): Promise<LoadedLogo | null> =>
+  new Promise((resolve) => {
+    const img = new Image()
+    img.crossOrigin = 'anonymous'
+    img.onload = () => {
+      try {
+        const canvas = document.createElement('canvas')
+        canvas.width = img.naturalWidth || 200
+        canvas.height = img.naturalHeight || 100
+        const ctx = canvas.getContext('2d')
+        if (!ctx) {
+          resolve(null)
+          return
+        }
+        ctx.drawImage(img, 0, 0)
+        resolve({
+          dataUrl: canvas.toDataURL('image/png'),
+          width: canvas.width,
+          height: canvas.height
+        })
+      } catch {
+        resolve(null)
+      }
+    }
+    img.onerror = () => resolve(null)
+    img.src = '/img/logo-luxury.png'
+  })
+
+const buildTicketDocument = (data: TicketData, logo: LoadedLogo | null): jsPDF => {
+  const pageWidth = 80
+  const marginX = 5
+  const contentWidth = pageWidth - marginX * 2
+  const labelWidth = 25
+  const valueWidth = contentWidth - labelWidth - 2
+
+  const renderInto = (doc: jsPDF, dryRun: boolean): number => {
+    let y = 6
+
+    // Logo centrado con proporción original
+    if (logo && logo.width > 0 && logo.height > 0) {
+      const maxLogoW = 24
+      const maxLogoH = 15
+      const ratio = Math.min(maxLogoW / logo.width, maxLogoH / logo.height)
+      const drawW = logo.width * ratio
+      const drawH = logo.height * ratio
+      if (!dryRun) {
+        doc.addImage(logo.dataUrl, 'PNG', (pageWidth - drawW) / 2, y, drawW, drawH)
+      }
+      y += drawH + 3
+    }
+
+    // Cabecera
+    doc.setFont('helvetica', 'bold')
+    doc.setFontSize(13)
+    if (!dryRun) {
+      doc.setTextColor(8, 28, 45)
+      doc.text('AHORRO LUXURY', pageWidth / 2, y, { align: 'center' })
+    }
+    y += 4.6
+
+    doc.setFont('helvetica', 'normal')
+    doc.setFontSize(9.2)
+    if (!dryRun) {
+      doc.setTextColor(74, 85, 104)
+      doc.text('Comprobante de Ingreso', pageWidth / 2, y, { align: 'center' })
+    }
+    y += 4
+
+    const drawDivider = () => {
+      if (!dryRun) {
+        doc.setDrawColor(140, 152, 168)
+        doc.setLineWidth(0.25)
+        doc.setLineDashPattern([1.2, 1.2], 0)
+        doc.line(marginX, y, pageWidth - marginX, y)
+        doc.setLineDashPattern([], 0)
+      }
+      y += 4
+    }
+
+    const drawMetaRow = (label: string, value: string, highlight = false) => {
+      doc.setFont('helvetica', 'bold')
+      doc.setFontSize(8.5)
+      const valLines = doc.splitTextToSize(value || '-', valueWidth) as string[]
+      if (!dryRun) {
+        doc.setFont('helvetica', highlight ? 'bold' : 'normal')
+        doc.setTextColor(highlight ? 8 : 55, highlight ? 28 : 65, highlight ? 45 : 81)
+        doc.text(label, marginX, y)
+
+        doc.setFont('helvetica', 'bold')
+        doc.setTextColor(17, 24, 39)
+        valLines.forEach((line, idx) => {
+          doc.text(line, pageWidth - marginX, y + idx * 3.8, { align: 'right' })
+        })
+      }
+      y += valLines.length * 3.8 + 1.3
+    }
+
+    drawDivider()
+
+    drawMetaRow('Nro Recibo', `#${data.id}`)
+    if (data.loanId) {
+      drawMetaRow('ID Préstamo', `#${data.loanId}`, true)
+    }
+    drawMetaRow('Fecha', data.date)
+    drawMetaRow('Socio', data.partnerName)
+    drawMetaRow('Documento', data.documentId)
+
+    drawDivider()
+
+    // Detalle de conceptos pagados
+    const conceptMaxWidth = 44
+    for (const item of data.items) {
+      doc.setFont('helvetica', 'bold')
+      doc.setFontSize(8.5)
+      const conceptLines = doc.splitTextToSize(item.concept, conceptMaxWidth) as string[]
+      const amountStr = formatCurrency(Number(item.amount))
+
+      if (!dryRun) {
+        doc.setTextColor(17, 24, 39)
+        conceptLines.forEach((line, idx) => {
+          doc.text(line, marginX, y + idx * 3.8)
+        })
+        doc.text(amountStr, pageWidth - marginX, y, { align: 'right' })
+      }
+      y += conceptLines.length * 3.8 + 0.8
+
+      doc.setFont('helvetica', 'normal')
+      doc.setFontSize(7.5)
+      if (!dryRun) {
+        doc.setTextColor(100, 116, 139)
+        doc.text(`Medio: ${String(item.method || '').toUpperCase()}`, marginX, y)
+      }
+      y += 4.2
+    }
+
+    drawDivider()
+
+    // Total Pagado
+    doc.setFont('helvetica', 'bold')
+    doc.setFontSize(10.5)
+    if (!dryRun) {
+      doc.setTextColor(8, 28, 45)
+      doc.text('TOTAL PAGADO:', marginX, y)
+      doc.setTextColor(31, 122, 99)
+      doc.text(formatCurrency(Number(data.totalAmount)), pageWidth - marginX, y, { align: 'right' })
+    }
+    y += 4.5
+
+    drawDivider()
+
+    // Pie de página
+    doc.setFont('helvetica', 'normal')
+    doc.setFontSize(8.2)
+    const regLines = doc.splitTextToSize(`Atendido por: ${data.registeredBy || '-'}`, contentWidth) as string[]
+    if (!dryRun) {
+      doc.setTextColor(31, 41, 55)
+      regLines.forEach((line, idx) => {
+        doc.text(line, pageWidth / 2, y + idx * 3.8, { align: 'center' })
+      })
+    }
+    y += regLines.length * 3.8 + 2
+
+    doc.setFont('helvetica', 'bold')
+    doc.setFontSize(8.2)
+    if (!dryRun) {
+      doc.setTextColor(8, 28, 45)
+      doc.text('¡Gracias por su puntualidad!', pageWidth / 2, y, { align: 'center' })
+    }
+    y += 4
+
+    doc.setFont('helvetica', 'normal')
+    doc.setFontSize(7.2)
+    if (!dryRun) {
+      doc.setTextColor(100, 116, 139)
+      doc.text('Este documento es un soporte válido de Ahorro Luxury.', pageWidth / 2, y, { align: 'center' })
+    }
+    y += 6
+
+    return Math.max(85, Math.ceil(y))
+  }
+
+  const measureDoc = new jsPDF({ unit: 'mm', format: [pageWidth, 250], orientation: 'portrait' })
+  const exactHeight = renderInto(measureDoc, true)
+
+  const finalDoc = new jsPDF({ unit: 'mm', format: [pageWidth, exactHeight], orientation: 'portrait' })
+  renderInto(finalDoc, false)
+
+  return finalDoc
+}
 
 const createPDF = async (): Promise<File> => {
   if (!props.ticketData) throw new Error('No hay datos para generar el recibo.')
 
-  await nextTick()
+  const data = props.ticketData
+  const logo = await loadLogoImage()
+  const doc = buildTicketDocument(data, logo)
 
-  const element = ticketElement.value
-  if (!element) throw new Error('No se pudo preparar el recibo para generar el PDF.')
+  const personName = sanitizeFilename(data.partnerName) || 'Socio'
+  const receiptId = sanitizeFilename(data.id) || String(Date.now())
+  const filename = data.loanId
+    ? `Abono_Prestamo_${sanitizeFilename(data.loanId)}_${personName}_${receiptId}.pdf`
+    : `Abono_${personName}_${receiptId}.pdf`
 
-  const personName = sanitizeFilename(props.ticketData.partnerName) || 'Socio'
-  const receiptId = sanitizeFilename(props.ticketData.id) || String(Date.now())
-  const filename = `Abono_${personName}_${receiptId}.pdf`
-  const height = Math.ceil((element.scrollHeight * 25.4) / 96) + 6
-
-  const opt: Parameters<InstanceType<typeof html2pdf.Worker>['set']>[0] = {
-    margin: [3, 3, 3, 3],
-    filename,
-    image: { type: 'jpeg', quality: 0.98 },
-    html2canvas: { scale: 2, useCORS: true },
-    jsPDF: { unit: 'mm', format: [80, height], orientation: 'portrait' }
-  }
-
-  const pdf: Blob = await html2pdf().set(opt).from(element).outputPdf('blob')
-  return new File([pdf], filename, { type: 'application/pdf' })
+  const blob = doc.output('blob')
+  return new File([blob], filename, { type: 'application/pdf' })
 }
 
 const downloadPDF = async (): Promise<void> => {
@@ -68,182 +261,8 @@ const downloadPDF = async (): Promise<void> => {
 }
 
 defineExpose({ downloadPDF })
-
-const formatCurrency = (val: number) => {
-  return new Intl.NumberFormat('es-CO', { 
-    style: 'currency', 
-    currency: 'COP', 
-    maximumFractionDigits: 0 
-  }).format(val)
-}
 </script>
 
 <template>
-  <!-- Contenedor oculto en la vista web -->
-  <div class="ticket-hidden-container">
-    <div ref="ticketElement" class="ticket-body" v-if="ticketData">
-      
-      <!-- Cabecera del Recibo -->
-      <div class="ticket-header">
-        <img src="/img/logo-luxury.png" alt="Ahorro Luxury Logo" class="ticket-logo" />
-        <h2>AHORRO LUXURY</h2>
-        <p>Comprobante de Ingreso</p>
-        <div class="divider"></div>
-      </div>
-
-      <!-- Datos del Socio -->
-      <div class="ticket-info">
-        <p><strong>Nro Recibo:</strong> #{{ ticketData.id }}</p>
-        <p><strong>Fecha:</strong> {{ ticketData.date }}</p>
-        <p><strong>Socio:</strong> {{ ticketData.partnerName }}</p>
-        <p><strong>Documento:</strong> {{ ticketData.documentId }}</p>
-      </div>
-
-      <div class="divider"></div>
-
-      <!-- Ciclo de Conceptos Pagados -->
-      <div class="ticket-details">
-        <div class="detail-item" v-for="(item, index) in ticketData.items" :key="index">
-          <div class="detail-row">
-            <span class="concept-name">{{ item.concept }}</span>
-            <strong>{{ formatCurrency(Number(item.amount)) }}</strong>
-          </div>
-          <div class="detail-row sub-row">
-            <span>Medio: {{ item.method.toUpperCase() }}</span>
-          </div>
-        </div>
-
-        <div class="divider"></div>
-
-        <div class="detail-row total-row">
-          <span>TOTAL PAGADO:</span>
-          <strong>{{ formatCurrency(Number(ticketData.totalAmount)) }}</strong>
-        </div>
-      </div>
-
-      <div class="divider"></div>
-
-      <!-- Pie de página -->
-      <div class="ticket-footer">
-        <p>Atendido por: {{ ticketData.registeredBy }}</p>
-        <p class="bold">¡Gracias por su puntualidad!</p>
-        <small>Este documento es un soporte válido de Ahorro Luxury.</small>
-      </div>
-
-    </div>
-  </div>
+  <span style="display: none" aria-hidden="true"></span>
 </template>
-
-<style scoped>
-.ticket-hidden-container {
-  position: absolute;
-  left: -9999px;
-  top: -9999px;
-}
-
-.ticket-body {
-  box-sizing: border-box;
-  width: 280px;
-  padding: 14px;
-  background-color: #ffffff;
-  color: #000000;
-  font-family: 'Courier New', Courier, monospace;
-  overflow-wrap: anywhere;
-}
-
-.ticket-header {
-  text-align: center;
-  margin-bottom: 10px;
-}
-
-.ticket-logo {
-  width: 50px;
-  height: auto;
-  margin-bottom: 8px;
-}
-
-.ticket-header h2 {
-  font-size: 1.1rem;
-  margin: 0 0 4px 0;
-  font-weight: 800;
-}
-
-.ticket-header p {
-  font-size: 0.8rem;
-  margin: 0;
-}
-
-.divider {
-  border-top: 1px dashed #000;
-  margin: 10px 0;
-}
-
-.ticket-info p {
-  font-size: 0.8rem;
-  margin: 3px 0;
-}
-
-.ticket-details {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-}
-
-.detail-item {
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-}
-
-.detail-row {
-  display: flex;
-  justify-content: space-between;
-  align-items: flex-start;
-  gap: 8px;
-  font-size: 0.8rem;
-}
-
-.concept-name {
-  font-weight: 600;
-  flex: 1;
-  min-width: 0;
-}
-
-.detail-row strong {
-  flex-shrink: 0;
-  white-space: nowrap;
-}
-
-.sub-row span {
-  font-size: 0.7rem;
-  color: #444;
-}
-
-.total-row {
-  font-size: 1rem;
-  font-weight: bold;
-  margin-top: 5px;
-}
-
-.ticket-footer {
-  text-align: center;
-  font-size: 0.75rem;
-  margin-top: 10px;
-}
-
-.ticket-footer p {
-  margin: 3px 0;
-}
-
-.ticket-footer .bold {
-  font-weight: bold;
-  margin-top: 8px;
-}
-
-.ticket-footer small {
-  font-size: 0.6rem;
-  color: #555;
-  display: block;
-  margin-top: 8px;
-}
-</style>

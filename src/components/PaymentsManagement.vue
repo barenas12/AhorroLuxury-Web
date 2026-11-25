@@ -100,7 +100,7 @@ const props = defineProps<{
 const isAdmin = computed(() => isAdminUser(props.currentUser))
 const receipts = ref<ConsolidatedReceiptRecord[]>([])
 const payers = ref<PayerOption[]>([])
-const searchColumn = ref<'todas' | 'partnerName' | 'partnerDocument' | 'conceptsSummary' | 'paymentDate' | 'registeredByName' | 'ticket'>('todas')
+const searchColumn = ref<'todas' | 'partnerName' | 'partnerDocument' | 'conceptsSummary' | 'loanId' | 'paymentDate' | 'registeredByName' | 'ticket'>('todas')
 const searchQuery = ref('')
 const methodFilter = ref<string>('todos')
 const sortKey = ref<PaymentSortKey>('id')
@@ -122,7 +122,6 @@ const currentTicketData = ref<TicketData | null>(null)
 const allConcepts = [
   'Abono Ahorro',
   'Pago Boleta',
-  'Pago Cuota Préstamo',
   'Multa',
   'Otro Aporte'
 ]
@@ -369,21 +368,28 @@ const filteredReceipts = computed(() => {
           return String(r.partnerDocument || '').toLowerCase().includes(q)
         case 'conceptsSummary':
           return r.conceptsSummary.toLowerCase().includes(q)
+        case 'loanId': {
+          const cleanQ = q.replace('#', '')
+          return Boolean(r.loanId && String(r.loanId).includes(cleanQ))
+        }
         case 'paymentDate':
           return (r.paymentDate || '').toLowerCase().includes(q)
         case 'registeredByName':
           return (r.registeredByName || '').toLowerCase().includes(q)
         case 'ticket':
           return r.items.some(it => it.ticketNumber && it.ticketNumber.includes(q))
-        default:
+        default: {
+          const cleanQ = q.replace('#', '')
           return (
             r.partnerName.toLowerCase().includes(q) ||
             String(r.partnerDocument || '').toLowerCase().includes(q) ||
             r.conceptsSummary.toLowerCase().includes(q) ||
+            Boolean(r.loanId && (`prestamo ${r.loanId}`.includes(cleanQ) || String(r.loanId).includes(cleanQ))) ||
             (r.paymentDate || '').toLowerCase().includes(q) ||
             (r.registeredByName || '').toLowerCase().includes(q) ||
             r.items.some(it => it.ticketNumber && it.ticketNumber.includes(q))
           )
+        }
       }
     })
   }
@@ -452,6 +458,7 @@ const totalMultas = computed(() =>
 const downloadReceiptPDF = async (receipt: ConsolidatedReceiptRecord): Promise<void> => {
   currentTicketData.value = {
     id: String(receipt.id),
+    loanId: receipt.loanId ? String(receipt.loanId) : null,
     date: receipt.paymentDate,
     partnerName: receipt.partnerName,
     documentId: receipt.payerType === 'external' ? `Externo (${receipt.partnerDocument})` : receipt.partnerDocument,
@@ -613,6 +620,7 @@ onMounted(() => {
           <option value="partnerName">Socio / Externo</option>
           <option value="partnerDocument">Documento / Tel</option>
           <option value="conceptsSummary">Conceptos</option>
+          <option value="loanId">ID Préstamo</option>
           <option value="paymentDate">Fecha Imputada</option>
           <option value="registeredByName">Registrado Por</option>
           <option value="ticket">Boleta</option>
@@ -670,6 +678,7 @@ onMounted(() => {
             <td>
               <div class="concept-cell">
                 <span class="concept-badge">{{ rec.conceptsSummary }}</span>
+                <span v-if="rec.loanId" class="loan-ref-pill">Préstamo #{{ rec.loanId }}</span>
                 <small v-if="rec.itemsCount > 1" class="multi-pill">
                   {{ rec.itemsCount }} pagos agrupados
                 </small>
@@ -840,7 +849,7 @@ onMounted(() => {
                         type="number"
                         v-model="item.amount"
                         min="0"
-                        step="500"
+                        step="1"
                         placeholder="0"
                         required
                       />
@@ -889,7 +898,7 @@ onMounted(() => {
                         type="number"
                         v-model="item.fineAmount"
                         min="0"
-                        step="500"
+                        step="1"
                         placeholder="Ej. 50000"
                       />
                     </div>
@@ -972,8 +981,9 @@ th { background-color: var(--color-bg-light); color: var(--color-primary); font-
 .sub-text { display: block; font-size: 0.75rem; color: var(--color-muted); }
 .ext-badge { background: #e9d8fd; color: #553c9a; padding: 0.1rem 0.45rem; border-radius: 6px; font-weight: 700; font-size: 0.72rem; }
 .ext-badge-inline { background: #e9d8fd; color: #553c9a; padding: 0.1rem 0.4rem; border-radius: 4px; font-weight: 700; font-size: 0.7rem; margin-left: 0.4rem; }
-.concept-cell { display: flex; flex-direction: column; gap: 0.2rem; white-space: normal; max-width: 260px; }
+.concept-cell { display: flex; flex-direction: column; gap: 0.25rem; white-space: normal; max-width: 260px; }
 .concept-badge { font-weight: 600; color: #2d3748; font-size: 0.85rem; }
+.loan-ref-pill { display: inline-flex; width: fit-content; background: #ebf8ff; color: #2b6cb0; border: 1px solid #bee3f8; padding: 0.12rem 0.5rem; border-radius: 6px; font-size: 0.74rem; font-weight: 700; }
 .multi-pill { color: #2b6cb0; font-size: 0.72rem; font-weight: 700; }
 .methods-stack { display: flex; gap: 0.3rem; flex-wrap: wrap; }
 .method-tag { padding: 0.2rem 0.55rem; border-radius: 6px; font-size: 0.75rem; font-weight: 700; }

@@ -9,6 +9,8 @@ export interface LoanRecord {
   partnerName: string
   documentId: string
   initialCapital: number
+  interestMode?: 'percentage' | 'fixed'
+  fixedInterestAmount?: number | null
   interestRate: number
   deliveryMethod: 'efectivo' | 'transferencia'
   guarantee: string
@@ -68,7 +70,7 @@ const isAdmin = computed(() => isAdminUser(props.currentUser))
 const loans = ref<LoanRecord[]>([])
 const partners = ref<{ id: number, fullName: string, documentId: string }[]>([])
 const isLoading = ref(false)
-const searchColumn = ref<'todas' | 'partnerName' | 'documentId' | 'guarantee' | 'deliveryDate' | 'registeredByName'>('todas')
+const searchColumn = ref<'todas' | 'id' | 'partnerName' | 'documentId' | 'guarantee' | 'deliveryDate' | 'registeredByName'>('todas')
 const searchQuery = ref('')
 const statusFilter = ref<'Activo' | 'Pagado' | 'Todos'>('Activo')
 const sortKey = ref<LoanSortKey>('id')
@@ -103,8 +105,9 @@ const defaultTermDays = 30
 const newLoanForm = ref({
   partnerId: 0,
   initialCapital: 0,
+  interestMode: 'percentage' as 'percentage' | 'fixed',
   interestRate: 7,
-  initialInterestAmount: 0,
+  fixedInterestAmount: 0,
   deliveryMethod: 'transferencia' as 'efectivo' | 'transferencia',
   guarantee: 'Oro',
   deliveryDate: today,
@@ -114,9 +117,14 @@ const newLoanForm = ref({
 })
 
 watch(
-  [() => newLoanForm.value.initialCapital, () => newLoanForm.value.interestRate],
-  ([cap, rate]) => {
-    newLoanForm.value.initialInterestAmount = Math.round(Number(cap || 0) * (Number(rate || 0) / 100))
+  () => newLoanForm.value.interestMode,
+  (mode) => {
+    const cap = Number(newLoanForm.value.initialCapital || 0)
+    if (mode === 'fixed' && !newLoanForm.value.fixedInterestAmount && cap > 0) {
+      newLoanForm.value.fixedInterestAmount = Math.round(cap * (Number(newLoanForm.value.interestRate || 0) / 100))
+    } else if (mode === 'percentage' && cap > 0 && newLoanForm.value.fixedInterestAmount > 0) {
+      newLoanForm.value.interestRate = Number(((Number(newLoanForm.value.fixedInterestAmount) / cap) * 100).toFixed(2))
+    }
   }
 )
 
@@ -131,7 +139,9 @@ const payForm = ref({
 })
 
 const editInterestForm = ref({
+  interestMode: 'percentage' as 'percentage' | 'fixed',
   interestRate: 7,
+  fixedInterestAmount: 0,
   targetRemainingInterest: 0
 })
 
@@ -149,9 +159,19 @@ const filteredPartnerOptions = computed(() => {
   )
 })
 
-const initialInterestPreview = computed(() =>
-  Math.round(Number(newLoanForm.value.initialCapital || 0) * (Number(newLoanForm.value.interestRate || 0) / 100))
-)
+const cycleInterestPreview = computed(() => {
+  const cap = Number(newLoanForm.value.initialCapital || 0)
+  if (newLoanForm.value.interestMode === 'fixed') {
+    return Math.max(0, Math.round(Number(newLoanForm.value.fixedInterestAmount || 0)))
+  }
+  return Math.max(0, Math.round(cap * (Number(newLoanForm.value.interestRate || 0) / 100)))
+})
+
+const equivalentRatePreview = computed(() => {
+  const cap = Number(newLoanForm.value.initialCapital || 0)
+  if (cap <= 0) return 0
+  return Number(((cycleInterestPreview.value / cap) * 100).toFixed(2))
+})
 
 const loadData = async () => {
   isLoading.value = true
@@ -189,6 +209,8 @@ const filteredLoans = computed(() => {
   if (q) {
     list = list.filter(l => {
       switch (searchColumn.value) {
+        case 'id':
+          return String(l.id).includes(q.replace('#', ''))
         case 'partnerName':
           return l.partnerName.toLowerCase().includes(q)
         case 'documentId':
@@ -201,6 +223,7 @@ const filteredLoans = computed(() => {
           return (l.registeredByName || '').toLowerCase().includes(q)
         default:
           return (
+            String(l.id).includes(q.replace('#', '')) ||
             l.partnerName.toLowerCase().includes(q) ||
             String(l.documentId || '').toLowerCase().includes(q) ||
             (l.guarantee || '').toLowerCase().includes(q) ||
@@ -275,11 +298,14 @@ const downloadLoanReceipt = async (data: LoanReceiptData): Promise<void> => {
 const downloadLoanContractPDF = async (loan: LoanRecord): Promise<void> => {
   const receiptData: LoanReceiptData = {
     id: String(loan.id),
+    loanId: String(loan.id),
     partnerName: loan.partnerName,
     documentId: loan.documentId,
     deliveryMethod: loan.deliveryMethod,
     capital: Number(loan.initialCapital),
     guarantee: loan.guarantee,
+    interestMode: loan.interestMode || 'percentage',
+    interestPerCycle: Number(loan.interestPerCycle || 0),
     interestRate: Number(loan.interestRate),
     deliveryDate: formatDate(loan.deliveryDate),
     installments: Number(loan.installments || 1),
@@ -300,15 +326,18 @@ const downloadLoanContractPDF = async (loan: LoanRecord): Promise<void> => {
   await downloadLoanReceipt(receiptData)
 }
 
-// Descarga manual del PDF de un abono consolidado de préstamo (con su ID único)
+// Descarga manual del PDF de un abono consolidado de préstamo (con su ID único y el ID del préstamo)
 const downloadLoanPaymentReceiptPDF = async (loan: LoanRecord, receipt: LoanPaymentReceipt): Promise<void> => {
   const receiptData: LoanReceiptData = {
     id: String(receipt.id),
+    loanId: String(loan.id),
     partnerName: loan.partnerName,
     documentId: loan.documentId,
     deliveryMethod: loan.deliveryMethod,
     capital: Number(loan.initialCapital),
     guarantee: loan.guarantee,
+    interestMode: loan.interestMode || 'percentage',
+    interestPerCycle: Number(loan.interestPerCycle || 0),
     interestRate: Number(loan.interestRate),
     deliveryDate: formatDate(loan.deliveryDate),
     installments: Number(loan.installments || 1),
@@ -343,8 +372,9 @@ const openCreateModal = () => {
   newLoanForm.value = {
     partnerId: 0,
     initialCapital: 0,
+    interestMode: 'percentage',
     interestRate: 7,
-    initialInterestAmount: 0,
+    fixedInterestAmount: 0,
     deliveryMethod: 'transferencia',
     guarantee: 'Oro',
     deliveryDate: today,
@@ -387,10 +417,25 @@ const submitNewLoan = async () => {
       throw new Error(egressData.message || 'Error al descontar el dinero de la caja.')
     }
 
-    // 2. Crear el contrato del préstamo (sin fecha límite obligatoria y sin PDF automático)
+    // 2. Crear el contrato del préstamo (porcentaje % o valor fijo $ por ciclo)
     const loanPayload = {
-      ...newLoanForm.value,
+      partnerId: newLoanForm.value.partnerId,
+      initialCapital: Number(newLoanForm.value.initialCapital),
+      interestMode: newLoanForm.value.interestMode,
+      interestRate:
+        newLoanForm.value.interestMode === 'percentage'
+          ? Number(newLoanForm.value.interestRate || 0)
+          : equivalentRatePreview.value,
+      fixedInterestAmount:
+        newLoanForm.value.interestMode === 'fixed'
+          ? Number(newLoanForm.value.fixedInterestAmount || 0)
+          : null,
+      deliveryMethod: newLoanForm.value.deliveryMethod,
+      guarantee: newLoanForm.value.guarantee,
+      deliveryDate: newLoanForm.value.deliveryDate,
+      termDays: Number(newLoanForm.value.termDays || defaultTermDays),
       installments: Number(newLoanForm.value.installments) || 1,
+      observations: newLoanForm.value.observations,
       registeredBy: props.currentUser.id
     }
     const loanRes = await fetch(`${import.meta.env.VITE_API_URL}/api/loans`, {
@@ -432,7 +477,9 @@ const openEditInterestModal = (loan: LoanRecord) => {
   modalError.value = ''
   selectedLoan.value = loan
   editInterestForm.value = {
+    interestMode: loan.interestMode === 'fixed' ? 'fixed' : 'percentage',
     interestRate: Number(loan.interestRate),
+    fixedInterestAmount: Number(loan.fixedInterestAmount ?? loan.interestPerCycle ?? 0),
     targetRemainingInterest: Number(loan.remainingInterest)
   }
   showEditInterestModal.value = true
@@ -447,7 +494,12 @@ const submitEditInterest = async () => {
       method: 'PATCH',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
+        interestMode: editInterestForm.value.interestMode,
         interestRate: Number(editInterestForm.value.interestRate),
+        fixedInterestAmount:
+          editInterestForm.value.interestMode === 'fixed'
+            ? Number(editInterestForm.value.fixedInterestAmount)
+            : null,
         targetRemainingInterest: Number(editInterestForm.value.targetRemainingInterest)
       })
     })
@@ -558,6 +610,7 @@ onMounted(() => {
       <div class="column-filter-group">
         <select v-model="searchColumn" class="column-select" @change="searchQuery = ''">
           <option value="todas">Columna: Todas</option>
+          <option value="id">ID Préstamo</option>
           <option value="partnerName">Socio (Nombre)</option>
           <option value="documentId">Cédula</option>
           <option value="guarantee">Garantía</option>
@@ -582,6 +635,7 @@ onMounted(() => {
       <table>
         <thead>
           <tr>
+            <th><button type="button" class="sort-header" @click="toggleLoanSort('id')">ID{{ loanSortIndicator('id') }}</button></th>
             <th><button type="button" class="sort-header" @click="toggleLoanSort('partner')">Socio{{ loanSortIndicator('partner') }}</button></th>
             <th><button type="button" class="sort-header" @click="toggleLoanSort('capital')">Capital Prestado{{ loanSortIndicator('capital') }}</button></th>
             <th><button type="button" class="sort-header" @click="toggleLoanSort('remainingCapital')">Capital Pendiente{{ loanSortIndicator('remainingCapital') }}</button></th>
@@ -595,9 +649,10 @@ onMounted(() => {
           </tr>
         </thead>
         <tbody>
-          <tr v-if="isLoading"><td colspan="10" class="center-text">Cargando...</td></tr>
-          <tr v-else-if="filteredLoans.length === 0"><td colspan="10" class="center-text">No hay préstamos con los filtros actuales.</td></tr>
+          <tr v-if="isLoading"><td colspan="11" class="center-text">Cargando...</td></tr>
+          <tr v-else-if="filteredLoans.length === 0"><td colspan="11" class="center-text">No hay préstamos con los filtros actuales.</td></tr>
           <tr v-for="l in filteredLoans" :key="l.id">
+            <td><span class="loan-id-badge">#{{ l.id }}</span></td>
             <td>
               <strong>{{ l.partnerName }}</strong>
               <small class="sub-text">C.C. {{ l.documentId }}</small>
@@ -606,7 +661,13 @@ onMounted(() => {
             <td class="money-text debt-text">{{ formatCurrency(Number(l.remainingCapital)) }}</td>
             <td>
               <span class="money-text interest-pending-text">{{ formatCurrency(Number(l.remainingInterest)) }}</span>
-              <small class="sub-text">Tasa: {{ Number(l.interestRate) }}% ({{ formatCurrency(Number(l.interestPerCycle)) }}/ciclo)</small>
+              <small class="sub-text">
+                {{
+                  l.interestMode === 'fixed'
+                    ? `Fijo: ${formatCurrency(Number(l.interestPerCycle))}/ciclo (${Number(l.interestRate)}%)`
+                    : `Tasa: ${Number(l.interestRate)}% (${formatCurrency(Number(l.interestPerCycle))}/ciclo)`
+                }}
+              </small>
             </td>
             <td class="money-text profit-text">
               {{ formatCurrency(Number(l.paidInterest)) }}
@@ -708,30 +769,72 @@ onMounted(() => {
           <div class="form-row">
             <div class="field">
               <label>Capital a Prestar ($) *</label>
-              <input type="number" v-model="newLoanForm.initialCapital" min="1" required />
+              <input type="number" v-model="newLoanForm.initialCapital" min="1" step="1" required />
             </div>
             <div class="field">
-              <label>Tasa Interés Cada 30 Días (%) *</label>
-              <input type="number" v-model="newLoanForm.interestRate" step="0.1" min="0" required />
-              <small class="interest-hint">
-                Cada 30 días de mora suma: <strong>{{ formatCurrency(initialInterestPreview) }}</strong>
-              </small>
+              <label>Plazo Inicial (Días) *</label>
+              <input type="number" v-model="newLoanForm.termDays" required min="1" step="1" />
             </div>
           </div>
 
-          <div class="form-row">
-            <div class="field">
-              <label>Plazo (Días) *</label>
-              <input type="number" v-model="newLoanForm.termDays" required min="1" />
+          <div class="interest-config-box">
+            <div class="interest-config-top">
+              <label>Interés por Ciclo (cada 30 días) *</label>
+              <div class="interest-mode-toggle">
+                <button
+                  type="button"
+                  :class="['mode-btn', { active: newLoanForm.interestMode === 'percentage' }]"
+                  @click="newLoanForm.interestMode = 'percentage'"
+                >
+                  Porcentaje (%)
+                </button>
+                <button
+                  type="button"
+                  :class="['mode-btn', { active: newLoanForm.interestMode === 'fixed' }]"
+                  @click="newLoanForm.interestMode = 'fixed'"
+                >
+                  Valor Fijo ($)
+                </button>
+              </div>
             </div>
-            <div class="field">
-              <label>Valor Interés Inicial ($) — Manual en Pesos *</label>
-              <input type="number" v-model="newLoanForm.initialInterestAmount" min="0" step="500" required />
-              <small class="interest-hint" v-if="Number(newLoanForm.termDays) < 30">
-                Plazo menor a 30 días ({{ newLoanForm.termDays }}d): ingresa el valor manual en pesos.
-              </small>
-              <small class="interest-hint" v-else>
-                Editable en pesos si deseas un valor inicial distinto al {{ newLoanForm.interestRate }}%.
+
+            <div v-if="newLoanForm.interestMode === 'percentage'" class="field">
+              <label>Porcentaje de Interés (%) *</label>
+              <input
+                type="number"
+                v-model="newLoanForm.interestRate"
+                step="any"
+                min="0"
+                placeholder="Ej. 7 o 25"
+                required
+              />
+            </div>
+
+            <div v-else class="field">
+              <label>Valor Fijo de Interés por Ciclo ($) *</label>
+              <input
+                type="number"
+                v-model="newLoanForm.fixedInterestAmount"
+                step="1"
+                min="0"
+                placeholder="Ej. 5000"
+                required
+              />
+            </div>
+
+            <div class="cycle-preview-box">
+              <span>
+                Interés por ciclo: <strong>{{ formatCurrency(cycleInterestPreview) }}</strong>
+                <small v-if="newLoanForm.interestMode === 'fixed' && newLoanForm.initialCapital > 0">
+                  ({{ equivalentRatePreview }}%)
+                </small>
+              </span>
+              <span>
+                Total 1er ciclo (hasta día {{ newLoanForm.termDays || 30 }}):
+                <strong>{{ formatCurrency(Number(newLoanForm.initialCapital || 0) + cycleInterestPreview) }}</strong>
+              </span>
+              <small>
+                Si al vencer el plazo no hay abono, desde el día 1 de mora suma otro ciclo (+{{ formatCurrency(cycleInterestPreview) }}) cada 30 días.
               </small>
             </div>
           </div>
@@ -886,13 +989,41 @@ onMounted(() => {
         </div>
         <div v-if="modalError" class="modal-error">{{ modalError }}</div>
         <form @submit.prevent="submitEditInterest" class="modal-form">
-          <div class="field">
-            <label>Tasa de Interés (%) sobre Capital Inicial</label>
-            <input type="number" v-model="editInterestForm.interestRate" step="0.1" min="0" required />
+          <div class="interest-config-box">
+            <div class="interest-config-top">
+              <label>Tipo de Interés por Ciclo</label>
+              <div class="interest-mode-toggle">
+                <button
+                  type="button"
+                  :class="['mode-btn', { active: editInterestForm.interestMode === 'percentage' }]"
+                  @click="editInterestForm.interestMode = 'percentage'"
+                >
+                  Porcentaje (%)
+                </button>
+                <button
+                  type="button"
+                  :class="['mode-btn', { active: editInterestForm.interestMode === 'fixed' }]"
+                  @click="editInterestForm.interestMode = 'fixed'"
+                >
+                  Valor Fijo ($)
+                </button>
+              </div>
+            </div>
+
+            <div v-if="editInterestForm.interestMode === 'percentage'" class="field">
+              <label>Tasa de Interés (%) sobre Capital Inicial</label>
+              <input type="number" v-model="editInterestForm.interestRate" step="any" min="0" required />
+            </div>
+
+            <div v-else class="field">
+              <label>Valor Fijo por Ciclo ($)</label>
+              <input type="number" v-model="editInterestForm.fixedInterestAmount" step="1" min="0" required />
+            </div>
           </div>
+
           <div class="field">
             <label>Valor Interés Pendiente Actual ($)</label>
-            <input type="number" v-model="editInterestForm.targetRemainingInterest" min="0" step="500" required />
+            <input type="number" v-model="editInterestForm.targetRemainingInterest" min="0" step="1" required />
             <small class="interest-hint">Puedes ajustar libremente el valor de los intereses a cobrar hoy.</small>
           </div>
           <div class="modal-buttons">
@@ -974,6 +1105,15 @@ span.money-text { display: block; }
 .interest-pending-text { color: #b7791f; font-weight: 700; }
 .profit-text { color: var(--color-secondary); }
 .sub-text { display: block; font-size: 0.74rem; color: var(--color-muted); }
+.loan-id-badge { display: inline-block; background: #edf2f7; color: var(--color-primary); font-weight: 800; padding: 0.2rem 0.55rem; border-radius: 6px; font-size: 0.82rem; border: 1px solid #cbd5e0; }
+.interest-config-box { background: #f8fafc; border: 1px solid var(--color-border); border-radius: 8px; padding: 0.9rem 1rem; display: flex; flex-direction: column; gap: 0.75rem; }
+.interest-config-top { display: flex; justify-content: space-between; align-items: center; gap: 0.75rem; flex-wrap: wrap; }
+.interest-config-top label { font-size: 0.85rem; font-weight: 700; color: var(--color-primary); margin: 0; }
+.interest-mode-toggle { display: inline-flex; background: #e2e8f0; border-radius: 8px; padding: 0.2rem; gap: 0.2rem; }
+.mode-btn { border: none; background: transparent; padding: 0.4rem 0.85rem; border-radius: 6px; font-size: 0.8rem; font-weight: 700; color: #4a5568; cursor: pointer; transition: all 0.15s ease; }
+.mode-btn.active { background: var(--color-primary); color: #ffffff; }
+.cycle-preview-box { background: #f0fff4; border: 1px solid #9ae6b4; border-radius: 8px; padding: 0.65rem 0.85rem; display: flex; flex-direction: column; gap: 0.25rem; font-size: 0.82rem; color: #22543d; }
+.cycle-preview-box small { color: #2f855a; font-size: 0.76rem; }
 .status-badge { padding: 0.25rem 0.65rem; border-radius: 12px; font-size: 0.78rem; font-weight: 700; }
 .status-badge.active { background: #bee3f8; color: #2b6cb0; }
 .status-badge.paid { background: #c6f6d5; color: #22543d; }
