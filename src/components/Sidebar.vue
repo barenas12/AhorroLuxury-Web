@@ -213,8 +213,30 @@ const selectSection = (sectionId: string): void => {
         <h3>Ahorro Luxury</h3>
         <span class="portal-tag">Panel de Gestión</span>
       </div>
-      <button type="button" class="toggle-sidebar" @click="toggleSidebar" aria-label="Contraer menú">
-        {{ isCollapsed ? ">" : "<" }}
+      <button
+        type="button"
+        class="toggle-sidebar"
+        @click="toggleSidebar"
+        :aria-label="isCollapsed ? 'Expandir menú lateral' : 'Contraer menú lateral'"
+        :title="isCollapsed ? 'Expandir menú' : 'Contraer menú'"
+      >
+        <svg
+          class="toggle-icon"
+          width="18"
+          height="18"
+          viewBox="0 0 24 24"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+          aria-hidden="true"
+        >
+          <rect x="3" y="3" width="18" height="18" rx="3" />
+          <line x1="9" y1="3" x2="9" y2="21" />
+          <path v-if="!isCollapsed" d="M16 9l-3 3 3 3" />
+          <path v-else d="M13 9l3 3-3 3" />
+        </svg>
       </button>
       <button type="button" class="close-mobile-sidebar" @click="isMobileOpen = false" aria-label="Cerrar menú">
         ✕
@@ -270,6 +292,7 @@ const selectSection = (sectionId: string): void => {
   height: 100vh; /* Fija el alto al tamaño exacto del monitor */
   position: sticky; /* Mantiene el menú estático al hacer scroll en el contenido */
   top: 0; 
+  z-index: 20;
   background-color: #ffffff; 
   border-right: 1px solid var(--color-border); 
   display: flex; 
@@ -303,20 +326,33 @@ const selectSection = (sectionId: string): void => {
 }
 .toggle-sidebar {
   margin-left: auto;
-  width: 30px;
-  height: 30px;
-  display: flex;
+  width: 34px;
+  height: 34px;
+  flex-shrink: 0;
+  display: inline-flex;
   align-items: center;
   justify-content: center;
   border: 1px solid var(--color-border);
-  border-radius: 50%;
-  background: #ffffff;
+  border-radius: 10px;
+  background: #f4f7fa;
   color: var(--color-primary);
-  font-family: Arial, sans-serif;
-  font-size: 1.1rem;
-  font-weight: 600;
   padding: 0;
   cursor: pointer;
+  transition: background-color 0.2s ease, border-color 0.2s ease, color 0.2s ease, transform 0.2s ease, box-shadow 0.2s ease;
+}
+.toggle-sidebar:hover {
+  background: rgba(31, 122, 99, 0.12);
+  border-color: rgba(31, 122, 99, 0.35);
+  color: var(--color-secondary);
+  transform: scale(1.03);
+}
+.toggle-sidebar:focus-visible {
+  outline: none;
+  border-color: var(--color-secondary);
+  box-shadow: 0 0 0 3px rgba(31, 122, 99, 0.22);
+}
+.toggle-icon {
+  display: block;
 }
 .user-chip {
   display: flex;
@@ -479,14 +515,27 @@ const selectSection = (sectionId: string): void => {
 }
 .sidebar.collapsed .toggle-sidebar {
   position: absolute;
-  top: 1.5rem;
-  right: -0.35rem;
-  width: 24px;
-  height: 24px;
-  background: var(--color-primary);
+  top: calc(50% - 0.6rem);
+  right: -26px;
+  transform: translateY(-50%);
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  background: #ffffff;
+  color: var(--color-primary);
+  border: 1px solid var(--color-border);
+  box-shadow: 0 4px 12px rgba(8, 28, 45, 0.14);
+  z-index: 25;
+}
+.sidebar.collapsed .toggle-sidebar:hover {
+  background: var(--color-secondary);
+  border-color: var(--color-secondary);
   color: #ffffff;
-  border: none;
-  padding: 0;
+  transform: translateY(-50%) scale(1.06);
+}
+.sidebar.collapsed .toggle-icon {
+  width: 15px;
+  height: 15px;
 }
 .sidebar.collapsed .user-chip {
   justify-content: center;
