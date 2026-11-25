@@ -727,6 +727,7 @@ onMounted(() => {
               v-model="payerSearchText"
               placeholder="Escribe el nombre, cédula o número de boleta..."
               @focus="showPayerDropdown = true"
+              @blur="showPayerDropdown = false"
               @input="form.selectedKey = ''; showPayerDropdown = true"
               autocomplete="off"
               required

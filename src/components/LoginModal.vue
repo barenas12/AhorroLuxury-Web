@@ -92,7 +92,7 @@ const handleSubmit = async (): Promise<void> => {
 
       <form @submit.prevent="handleSubmit" class="login-form">
         <div class="form-group">
-          <label for="user">Usuario (Documento)</label>
+          <label for="user">Usuario</label>
           <input
             id="user"
             name="username"

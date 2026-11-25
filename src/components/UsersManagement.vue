@@ -52,6 +52,11 @@ const today = new Date().toISOString().substring(0, 10)
 const newTicket1Input = ref<string>('')
 const newTicket2Input = ref<string>('')
 
+// Autocomplete buscable de coordinador
+const coordinatorSearchText = ref<string>('')
+const showCoordinatorDropdown = ref<boolean>(false)
+const isFilteringCoordinator = ref<boolean>(false)
+
 const form = ref({
   id: 0,
   documentId: '',
@@ -218,12 +223,29 @@ const removeTicket2 = (t: string) => {
   form.value.ticket2 = form.value.ticket2.filter(item => item !== t)
 }
 
+const filteredCoordinatorOptions = computed(() => {
+  const q = coordinatorSearchText.value.toLowerCase().trim()
+  if (!isFilteringCoordinator.value || !q) return coordinators.value
+  return coordinators.value.filter(c => c.fullName.toLowerCase().includes(q))
+})
+
+const pickCoordinator = (c: CoordinatorOption) => {
+  form.value.coordinator = c.id
+  coordinatorSearchText.value = c.fullName
+  showCoordinatorDropdown.value = false
+  isFilteringCoordinator.value = false
+}
+
 // Apertura de Modales
 const openCreateModal = () => {
   isEditing.value = false
   modalError.value = ''
   newTicket1Input.value = ''
   newTicket2Input.value = ''
+  const defaultCoordinator = coordinators.value[0]
+  coordinatorSearchText.value = defaultCoordinator?.fullName || ''
+  showCoordinatorDropdown.value = false
+  isFilteringCoordinator.value = false
   form.value = {
     id: 0,
     documentId: '',
@@ -233,7 +255,7 @@ const openCreateModal = () => {
     frequency: 15,
     savingsStartDate: today,
     cellphone: '',
-    coordinator: coordinators.value[0]?.id || 0,
+    coordinator: defaultCoordinator?.id || 0,
     profile: 3,
     canLogin: true,
     ticket: [],
@@ -247,6 +269,10 @@ const openEditModal = (user: PartnerUser) => {
   modalError.value = ''
   newTicket1Input.value = ''
   newTicket2Input.value = ''
+  const matchedCoordinator = coordinators.value.find(c => c.id === user.coordinator)
+  coordinatorSearchText.value = matchedCoordinator?.fullName || user.coordinatorName || ''
+  showCoordinatorDropdown.value = false
+  isFilteringCoordinator.value = false
   form.value = {
     id: user.id,
     documentId: user.documentId,
@@ -270,6 +296,10 @@ const submitUser = async () => {
   modalError.value = ''
   if (!form.value.documentId || !form.value.name || !form.value.lastName) {
     modalError.value = 'Cédula, nombre y apellidos son campos obligatorios.'
+    return
+  }
+  if (!form.value.coordinator) {
+    modalError.value = 'Debes seleccionar un coordinador asignado de la lista.'
     return
   }
 
@@ -585,14 +615,31 @@ onMounted(() => {
               <input type="date" v-model="form.savingsStartDate" required />
             </div>
 
-            <div class="field">
-              <label>Coordinador Asignado *</label>
-              <select v-model="form.coordinator" required>
-                <option :value="0" disabled>-- Seleccionar Coordinador --</option>
-                <option v-for="c in coordinators" :key="c.id" :value="c.id">
-                  {{ c.fullName }}
-                </option>
-              </select>
+            <div class="field autocomplete-field">
+              <label>Coordinador Asignado (escribe el nombre) *</label>
+              <input
+                type="text"
+                v-model="coordinatorSearchText"
+                placeholder="Escribe el nombre del coordinador..."
+                @focus="showCoordinatorDropdown = true; isFilteringCoordinator = false"
+                @blur="showCoordinatorDropdown = false"
+                @input="form.coordinator = 0; showCoordinatorDropdown = true; isFilteringCoordinator = true"
+                autocomplete="off"
+                required
+              />
+              <div v-if="showCoordinatorDropdown" class="autocomplete-list">
+                <div
+                  v-for="c in filteredCoordinatorOptions"
+                  :key="c.id"
+                  :class="['autocomplete-item', { 'is-selected': form.coordinator === c.id }]"
+                  @mousedown.prevent="pickCoordinator(c)"
+                >
+                  <strong>{{ c.fullName }}</strong>
+                </div>
+                <div v-if="filteredCoordinatorOptions.length === 0" class="autocomplete-empty">
+                  No se encontraron coordinadores.
+                </div>
+              </div>
             </div>
           </div>
 
@@ -736,6 +783,11 @@ th { background-color: #f7fafc; color: var(--color-primary); font-weight: 700; f
 .field { display: flex; flex-direction: column; gap: 0.35rem; }
 .field label { font-size: 0.85rem; font-weight: 600; color: var(--color-primary); }
 .field input, .field select { padding: 0.7rem; border: 1px solid var(--color-border); border-radius: 6px; }
+.autocomplete-field { position: relative; }
+.autocomplete-list { position: absolute; top: calc(100% + 2px); left: 0; right: 0; background: #fff; border: 1px solid var(--color-border); border-radius: 6px; max-height: 220px; overflow-y: auto; z-index: 60; box-shadow: 0 8px 20px rgba(0,0,0,0.14); }
+.autocomplete-item { padding: 0.65rem 0.9rem; cursor: pointer; display: flex; justify-content: space-between; align-items: center; gap: 0.6rem; border-bottom: 1px solid #f1f5f9; }
+.autocomplete-item:hover, .autocomplete-item.is-selected { background: #edf2f7; }
+.autocomplete-empty { padding: 0.85rem; text-align: center; color: #718096; font-size: 0.85rem; }
 .quota-hint { font-size: 0.78rem; color: var(--color-secondary); }
 .switch-box { display: flex; align-items: center; gap: 0.5rem; cursor: pointer; font-size: 0.88rem; }
 

@@ -53,6 +53,10 @@ const isAssigning = ref<boolean>(false)
 const assignError = ref<string>('')
 const partnerSearchText = ref<string>('')
 const showPartnerDropdown = ref<boolean>(false)
+const isFilteringPartner = ref<boolean>(false)
+const coordinatorSearchText = ref<string>('')
+const showCoordinatorDropdown = ref<boolean>(false)
+const isFilteringCoordinator = ref<boolean>(false)
 
 const assignForm = ref({
   ticketNumber: '',
@@ -154,10 +158,16 @@ const filteredBoard = computed(() => {
 
 const filteredPartnerOptions = computed(() => {
   const q = partnerSearchText.value.toLowerCase().trim()
-  if (!q) return activePartners.value
+  if (!isFilteringPartner.value || !q) return activePartners.value
   return activePartners.value.filter(
     p => p.fullName.toLowerCase().includes(q) || String(p.documentId).toLowerCase().includes(q)
   )
+})
+
+const filteredCoordinatorOptions = computed(() => {
+  const q = coordinatorSearchText.value.toLowerCase().trim()
+  if (!isFilteringCoordinator.value || !q) return coordinators.value
+  return coordinators.value.filter(c => c.fullName.toLowerCase().includes(q))
 })
 
 const selectItem = (item: RaffleItem) => {
@@ -169,13 +179,18 @@ const openAssignModal = (item: RaffleItem) => {
   assignError.value = ''
   partnerSearchText.value = ''
   showPartnerDropdown.value = false
+  isFilteringPartner.value = false
+  const defaultCoordinator = coordinators.value[0]
+  coordinatorSearchText.value = defaultCoordinator?.fullName || ''
+  showCoordinatorDropdown.value = false
+  isFilteringCoordinator.value = false
   assignForm.value = {
     ticketNumber: item.number,
     assigneeType: 'partner',
     partnerId: 0,
     fullName: '',
     cellphone: '',
-    coordinatorId: coordinators.value[0]?.id || 0
+    coordinatorId: defaultCoordinator?.id || 0
   }
   showAssignModal.value = true
 }
@@ -184,6 +199,14 @@ const pickPartnerForTicket = (p: PartnerOption) => {
   assignForm.value.partnerId = p.id
   partnerSearchText.value = `${p.fullName} - C.C. ${p.documentId}`
   showPartnerDropdown.value = false
+  isFilteringPartner.value = false
+}
+
+const pickCoordinatorForTicket = (c: CoordinatorOption) => {
+  assignForm.value.coordinatorId = c.id
+  coordinatorSearchText.value = c.fullName
+  showCoordinatorDropdown.value = false
+  isFilteringCoordinator.value = false
 }
 
 const submitAssignTicket = async () => {
@@ -357,7 +380,7 @@ onMounted(() => {
     <!-- Detalle Flotante del Número Seleccionado -->
     <div v-if="selectedNumber" class="detail-card">
       <div class="detail-header">
-        <h3>Detalle de la Boleta #{{ selectedNumber.number }} ({{ title }})</h3>
+        <h3>Detalle de la Boleta #{{ selectedNumber.number }}</h3>
         <button type="button" class="btn-close-detail" @click="selectedNumber = null">✕</button>
       </div>
 
@@ -425,15 +448,16 @@ onMounted(() => {
               type="text"
               v-model="partnerSearchText"
               placeholder="Escribe el nombre o cédula del socio..."
-              @focus="showPartnerDropdown = true"
-              @input="assignForm.partnerId = 0; showPartnerDropdown = true"
+              @focus="showPartnerDropdown = true; isFilteringPartner = false"
+              @blur="showPartnerDropdown = false"
+              @input="assignForm.partnerId = 0; showPartnerDropdown = true; isFilteringPartner = true"
               autocomplete="off"
             />
             <div v-if="showPartnerDropdown" class="autocomplete-list">
               <div
                 v-for="p in filteredPartnerOptions"
                 :key="p.id"
-                class="autocomplete-item"
+                :class="['autocomplete-item', { 'is-selected': assignForm.partnerId === p.id }]"
                 @mousedown.prevent="pickPartnerForTicket(p)"
               >
                 <strong>{{ p.fullName }}</strong>
@@ -455,12 +479,31 @@ onMounted(() => {
               <label>Celular *</label>
               <input type="text" v-model="assignForm.cellphone" placeholder="Ej. 3001234567" required />
             </div>
-            <div class="field">
-              <label>Coordinador Responsable *</label>
-              <select v-model="assignForm.coordinatorId" required>
-                <option :value="0" disabled>-- Seleccionar Coordinador --</option>
-                <option v-for="c in coordinators" :key="c.id" :value="c.id">{{ c.fullName }}</option>
-              </select>
+            <div class="field autocomplete-field">
+              <label>Coordinador Responsable (escribe el nombre) *</label>
+              <input
+                type="text"
+                v-model="coordinatorSearchText"
+                placeholder="Escribe el nombre del coordinador..."
+                @focus="showCoordinatorDropdown = true; isFilteringCoordinator = false"
+                @blur="showCoordinatorDropdown = false"
+                @input="assignForm.coordinatorId = 0; showCoordinatorDropdown = true; isFilteringCoordinator = true"
+                autocomplete="off"
+                required
+              />
+              <div v-if="showCoordinatorDropdown" class="autocomplete-list">
+                <div
+                  v-for="c in filteredCoordinatorOptions"
+                  :key="c.id"
+                  :class="['autocomplete-item', { 'is-selected': assignForm.coordinatorId === c.id }]"
+                  @mousedown.prevent="pickCoordinatorForTicket(c)"
+                >
+                  <strong>{{ c.fullName }}</strong>
+                </div>
+                <div v-if="filteredCoordinatorOptions.length === 0" class="autocomplete-empty">
+                  No se encontraron coordinadores.
+                </div>
+              </div>
             </div>
           </template>
 
@@ -567,7 +610,7 @@ onMounted(() => {
 .autocomplete-field { position: relative; }
 .autocomplete-list { position: absolute; top: 100%; left: 0; right: 0; background: #fff; border: 1px solid var(--color-border); border-radius: 6px; max-height: 200px; overflow-y: auto; z-index: 50; box-shadow: 0 8px 20px rgba(0,0,0,0.12); margin-top: 2px; }
 .autocomplete-item { padding: 0.6rem 0.8rem; cursor: pointer; display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid #f1f5f9; }
-.autocomplete-item:hover { background: #edf2f7; }
+.autocomplete-item:hover, .autocomplete-item.is-selected { background: #edf2f7; }
 .autocomplete-item small { color: #718096; }
 .autocomplete-empty { padding: 0.8rem; text-align: center; color: #718096; font-size: 0.85rem; }
 

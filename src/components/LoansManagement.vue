@@ -684,6 +684,7 @@ onMounted(() => {
               v-model="partnerSearchText"
               placeholder="Escribe el nombre o cédula del socio..."
               @focus="showPartnerDropdown = true"
+              @blur="showPartnerDropdown = false"
               @input="newLoanForm.partnerId = 0; showPartnerDropdown = true"
               autocomplete="off"
               required

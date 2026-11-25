@@ -14,6 +14,7 @@ export interface EgressRecord {
 
 export interface Partner {
   id: number
+  documentId?: string
   fullName: string
   partnerStatus: number
 }
@@ -36,6 +37,11 @@ const sortDirection = ref<SortDirection>('desc')
 const searchColumn = ref<'todas' | 'concept' | 'recipient' | 'paymentDate' | 'paymentMethod' | 'observations' | 'registeredByName'>('todas')
 const searchQuery = ref('')
 
+// Autocomplete buscable de beneficiario (socio activo)
+const recipientSearchText = ref('')
+const showRecipientDropdown = ref(false)
+const isFilteringRecipient = ref(false)
+
 const today = new Date().toISOString().substring(0, 10)
 
 const form = ref({
@@ -47,10 +53,30 @@ const form = ref({
   observations: ''
 })
 
+const filteredActivePartners = computed(() => {
+  const q = recipientSearchText.value.toLowerCase().trim()
+  if (!isFilteringRecipient.value || !q) return activePartners.value
+  return activePartners.value.filter(
+    p =>
+      p.fullName.toLowerCase().includes(q) ||
+      String(p.documentId || '').toLowerCase().includes(q)
+  )
+})
+
+const pickRecipient = (p: Partner) => {
+  form.value.recipient = p.fullName
+  recipientSearchText.value = p.documentId ? `${p.fullName} - C.C. ${p.documentId}` : p.fullName
+  showRecipientDropdown.value = false
+  isFilteringRecipient.value = false
+}
+
 // Vigilamos si cambia el concepto para limpiar el beneficiario 
 // y evitar que quede un socio seleccionado si cambian a "Otros"
 watch(() => form.value.concept, () => {
   form.value.recipient = ''
+  recipientSearchText.value = ''
+  showRecipientDropdown.value = false
+  isFilteringRecipient.value = false
 })
 
 const loadData = async () => {
@@ -80,6 +106,9 @@ const loadData = async () => {
 
 const openModal = () => {
   modalError.value = ''
+  recipientSearchText.value = ''
+  showRecipientDropdown.value = false
+  isFilteringRecipient.value = false
   form.value = {
     concept: 'Préstamo Entregado',
     amount: 0,
@@ -98,7 +127,10 @@ const submitEgress = async () => {
     return
   }
   if (!form.value.recipient || !form.value.recipient.trim()) {
-    modalError.value = 'Debes especificar a quién se le entrega el dinero.'
+    modalError.value =
+      form.value.concept !== 'Otros'
+        ? 'Debes seleccionar un socio beneficiario de la lista.'
+        : 'Debes especificar a quién se le entrega el dinero.'
     return
   }
   
@@ -291,25 +323,51 @@ onMounted(() => {
               </select>
             </div>
             
-            <!-- BENEFICIARIO DINÁMICO (Select o Input) -->
-            <div class="field">
-              <label>Beneficiario (A quién se le paga) *</label>
-              
-              <!-- Si NO es "Otros", muestra la lista de socios activos -->
-              <select v-if="form.concept !== 'Otros'" v-model="form.recipient" required>
-                <option value="" disabled>-- Seleccione un socio --</option>
-                <option v-for="p in activePartners" :key="p.id" :value="p.fullName">
-                  {{ p.fullName }}
-                </option>
-              </select>
-              
+            <!-- BENEFICIARIO DINÁMICO (Buscador de socio o Input libre) -->
+            <div :class="['field', { 'autocomplete-field': form.concept !== 'Otros' }]">
+              <label>
+                {{
+                  form.concept !== 'Otros'
+                    ? 'Beneficiario (escribe nombre o documento) *'
+                    : 'Beneficiario (A quién se le paga) *'
+                }}
+              </label>
+
+              <!-- Si NO es "Otros", muestra buscador escribible de socios activos -->
+              <template v-if="form.concept !== 'Otros'">
+                <input
+                  type="text"
+                  v-model="recipientSearchText"
+                  placeholder="Escribe el nombre o cédula del socio..."
+                  @focus="showRecipientDropdown = true; isFilteringRecipient = false"
+                  @blur="showRecipientDropdown = false"
+                  @input="form.recipient = ''; showRecipientDropdown = true; isFilteringRecipient = true"
+                  autocomplete="off"
+                  required
+                />
+                <div v-if="showRecipientDropdown" class="autocomplete-list">
+                  <div
+                    v-for="p in filteredActivePartners"
+                    :key="p.id"
+                    :class="['autocomplete-item', { 'is-selected': form.recipient === p.fullName }]"
+                    @mousedown.prevent="pickRecipient(p)"
+                  >
+                    <strong>{{ p.fullName }}</strong>
+                    <small v-if="p.documentId">C.C. {{ p.documentId }}</small>
+                  </div>
+                  <div v-if="filteredActivePartners.length === 0" class="autocomplete-empty">
+                    No se encontraron socios.
+                  </div>
+                </div>
+              </template>
+
               <!-- Si es "Otros", muestra el campo de texto libre -->
-              <input 
-                v-else 
-                type="text" 
-                v-model="form.recipient" 
-                required 
-                placeholder="Nombre de la persona o local..." 
+              <input
+                v-else
+                type="text"
+                v-model="form.recipient"
+                required
+                placeholder="Nombre de la persona o local..."
               />
             </div>
           </div>
@@ -395,6 +453,12 @@ th { background-color: var(--color-bg-light); color: var(--color-primary); font-
 .field { display: flex; flex-direction: column; gap: 0.35rem; }
 .field label { font-size: 0.85rem; font-weight: 600; color: var(--color-primary); }
 .field input, .field select { padding: 0.7rem; border: 1px solid var(--color-border); border-radius: 6px; }
+.autocomplete-field { position: relative; }
+.autocomplete-list { position: absolute; top: calc(100% + 2px); left: 0; right: 0; background: #fff; border: 1px solid var(--color-border); border-radius: 6px; max-height: 220px; overflow-y: auto; z-index: 60; box-shadow: 0 8px 20px rgba(0,0,0,0.14); }
+.autocomplete-item { padding: 0.65rem 0.9rem; cursor: pointer; display: flex; justify-content: space-between; align-items: center; gap: 0.6rem; border-bottom: 1px solid #f1f5f9; }
+.autocomplete-item:hover, .autocomplete-item.is-selected { background: #edf2f7; }
+.autocomplete-item small { color: #718096; font-size: 0.76rem; }
+.autocomplete-empty { padding: 0.85rem; text-align: center; color: #718096; font-size: 0.85rem; }
 .mt-2 { margin-top: 0.8rem; }
 .modal-buttons { display: flex; justify-content: flex-end; gap: 1rem; margin-top: 1.5rem; border-top: 1px solid var(--color-border); padding-top: 1.5rem; }
 .btn-cancel { background: none; border: 1px solid var(--color-border); padding: 0.7rem 1.4rem; border-radius: 6px; cursor: pointer; }
