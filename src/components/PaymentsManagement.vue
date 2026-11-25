@@ -1034,8 +1034,10 @@ th { background-color: var(--color-bg-light); color: var(--color-primary); font-
 .fine-section-inline { background: #fff; border: 1px solid #e2e8f0; border-radius: 8px; padding: 0.75rem; display: flex; flex-direction: column; gap: 0.7rem; }
 .fine-section-inline.active { background: #fff5f5; border-color: #feb2b2; }
 .switch-label-inline { display: flex; align-items: center; gap: 0.5rem; cursor: pointer; font-size: 0.85rem; font-weight: 600; color: #2d3748; }
-.fine-input-inline { display: flex; flex-direction: column; gap: 0.3rem; max-width: 240px; }
-.fine-input-inline label { font-size: 0.8rem; font-weight: 700; color: #9b2c2c; }
+.fine-input-inline { display: flex; flex-direction: column; gap: 0.35rem; max-width: 280px; }
+.fine-input-inline label { font-size: 0.82rem; font-weight: 700; color: #9b2c2c; }
+.fine-input-inline input { width: 100%; padding: 0.7rem 0.8rem 0.7rem 1.75rem; border: 1px solid #feb2b2; border-radius: 8px; background: #ffffff; color: var(--color-text-dark); font-size: 0.94rem; transition: border-color 0.2s ease, box-shadow 0.2s ease; }
+.fine-input-inline input:focus { border-color: #c53030; box-shadow: 0 0 0 3px rgba(197, 48, 48, 0.14); }
 
 .summary-box { background: var(--color-bg-light); border: 1px solid var(--color-border); padding: 1rem; border-radius: 8px; display: flex; flex-direction: column; gap: 0.4rem; }
 .summary-row { display: flex; justify-content: space-between; font-size: 0.92rem; }

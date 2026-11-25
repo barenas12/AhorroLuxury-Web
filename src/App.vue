@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, onMounted, onUnmounted } from "vue";
+import { ref, computed, onMounted, onUnmounted } from "vue";
 import TheNavbar from "./components/TheNavbar.vue";
 import HeroSection from "./components/HeroSection.vue";
 import AboutSection from "./components/AboutSection.vue";
@@ -12,6 +12,7 @@ import TheFooter from "./components/TheFooter.vue";
 import ChangePasswordModal from "./components/ChangePasswordModal.vue";
 import SeoHead from "./components/SeoHead.vue";
 import { buildScopeQuery, getUserProfile, type ModuleAvailability } from "./utils/viewerScope";
+import { useSmoothScroll } from "./composables/useSmoothScroll";
 
 type ViewMode = "home" | "login" | "dashboard";
 
@@ -20,6 +21,10 @@ const currentSection = ref<string>("resumen");
 const currentUser = ref<UserSession | null>(null);
 const showResetPassModal = ref<boolean>(false);
 const moduleAvailability = ref<ModuleAvailability | null>(null);
+
+// Activar Lenis smooth scroll solo en la landing pública (no interfiere con el scroll del dashboard)
+const isLandingView = computed(() => currentView.value === "home");
+useSmoothScroll(isLandingView);
 
 const loadModuleAvailability = async (user: UserSession | null): Promise<void> => {
   if (!user || getUserProfile(user) === 1) {
@@ -211,6 +216,7 @@ const onPasswordChanged = (): void => {
 
 <template>
   <div class="app-layout">
+    <a href="#main-content" class="skip-link visually-hidden">Saltar al contenido principal</a>
     <SeoHead :view="currentView" :section="currentSection" />
     <ChangePasswordModal
       v-if="showResetPassModal && currentUser"
@@ -221,7 +227,12 @@ const onPasswordChanged = (): void => {
 
     <!-- Toast de Notificaciones -->
     <transition name="fade">
-      <div v-if="toastMessage" :class="['toast-notification', toastType]">
+      <div
+        v-if="toastMessage"
+        role="status"
+        aria-live="polite"
+        :class="['toast-notification', toastType]"
+      >
         <span>{{ toastMessage }}</span>
       </div>
     </transition>
@@ -235,7 +246,7 @@ const onPasswordChanged = (): void => {
       @open-login="openLogin"
     />
 
-    <main class="main-container">
+    <main id="main-content" class="main-container">
       <!-- 1. DASHBOARD -->
       <div
         v-if="currentView === 'dashboard' && currentUser"

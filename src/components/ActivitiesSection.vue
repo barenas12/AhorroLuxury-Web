@@ -1,4 +1,10 @@
 <script setup lang="ts">
+import { ref, onMounted, onUnmounted } from 'vue'
+import gsap from 'gsap'
+import { ScrollTrigger } from 'gsap/ScrollTrigger'
+
+gsap.registerPlugin(ScrollTrigger)
+
 interface PrizeTier {
   position: string
   amount: string
@@ -46,10 +52,64 @@ const drawDates: string[] = [
   '29 de mayo', '26 de junio', '31 de julio', '28 de agosto',
   '25 de septiembre', '30 de octubre', '27 de noviembre', '18 de diciembre (Premio Mayor)'
 ]
+
+const sectionRef = ref<HTMLElement | null>(null)
+let gsapCtx: gsap.Context | null = null
+
+onMounted(() => {
+  const mm = gsap.matchMedia()
+  mm.add('(prefers-reduced-motion: no-preference)', () => {
+    gsapCtx = gsap.context(() => {
+      gsap.from('.prize-card', {
+        y: 34,
+        opacity: 0,
+        duration: 0.72,
+        stagger: 0.16,
+        ease: 'power3.out',
+        scrollTrigger: {
+          trigger: '.prizes-grid',
+          start: 'top 82%',
+          once: true
+        }
+      })
+
+      gsap.from('.plan', {
+        y: 28,
+        scale: 0.97,
+        opacity: 0,
+        duration: 0.65,
+        stagger: 0.14,
+        ease: 'power3.out',
+        scrollTrigger: {
+          trigger: '.ticket-plans',
+          start: 'top 85%',
+          once: true
+        }
+      })
+
+      gsap.from('.chip', {
+        y: 16,
+        opacity: 0,
+        duration: 0.45,
+        stagger: 0.04,
+        ease: 'power2.out',
+        scrollTrigger: {
+          trigger: '.calendar-chips',
+          start: 'top 88%',
+          once: true
+        }
+      })
+    }, sectionRef.value || undefined)
+  })
+})
+
+onUnmounted(() => {
+  gsapCtx?.revert()
+})
 </script>
 
 <template>
-  <section id="actividades" class="section-padding activities-section">
+  <section ref="sectionRef" id="actividades" class="section-padding activities-section">
     <div class="container">
       <h2 class="section-title">Actividades y Rifa Anual</h2>
       <p class="section-subtitle">
@@ -83,9 +143,9 @@ const drawDates: string[] = [
       </div>
 
       <div class="ticket-plans">
-        <div 
-          v-for="plan in plans" 
-          :key="plan.id" 
+        <div
+          v-for="plan in plans"
+          :key="plan.id"
           :class="['plan', { featured: plan.isFeatured }]"
         >
           <span v-if="plan.isFeatured" class="popular">Recomendado</span>
@@ -98,7 +158,11 @@ const drawDates: string[] = [
       <div class="dates-container">
         <h4>Fechas de Sorteos Oficiales</h4>
         <div class="calendar-chips">
-          <span v-for="date in drawDates" :key="date" class="chip">
+          <span
+            v-for="date in drawDates"
+            :key="date"
+            :class="['chip', { 'chip-grand': date.includes('Premio Mayor') }]"
+          >
             {{ date }}
           </span>
         </div>
@@ -114,123 +178,176 @@ const drawDates: string[] = [
 
 .prizes-grid {
   display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 2rem;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 1.85rem;
   margin-bottom: 3rem;
 }
 
 .prize-card {
-  padding: 2.2rem;
-  border-radius: var(--radius);
+  position: relative;
+  overflow: hidden;
+  padding: 2.3rem;
+  border-radius: var(--radius-lg);
   color: #ffffff;
+  box-shadow: var(--shadow);
+  transition: transform 0.25s ease, box-shadow 0.25s ease;
+}
+
+.prize-card:hover {
+  transform: translateY(-4px);
+  box-shadow: var(--shadow-hover);
 }
 
 .main-prize {
-  background: linear-gradient(135deg, var(--color-primary) 0%, #173752 100%);
+  background: linear-gradient(135deg var(--in-oklab), var(--color-primary) 0%, #153854 100%);
 }
 
 .monthly-prize {
-  background: linear-gradient(135deg, var(--color-secondary) 0%, #145a49 100%);
+  background: linear-gradient(135deg var(--in-oklab), var(--color-secondary) 0%, #135545 100%);
 }
 
 .tag {
-  background: rgba(255, 255, 255, 0.2);
-  padding: 0.35rem 0.8rem;
-  font-size: 0.8rem;
-  font-weight: 600;
-  border-radius: 12px;
+  display: inline-block;
+  background: rgba(255, 255, 255, 0.18);
+  border: 1px solid rgba(255, 255, 255, 0.22);
+  padding: 0.38rem 0.9rem;
+  font-size: 0.82rem;
+  font-weight: 700;
+  border-radius: 999px;
 }
 
 .prize-card h3 {
   margin: 1.2rem 0 0.4rem 0;
-  font-size: 1.45rem;
+  font-size: clamp(1.3rem, 2.2vw, 1.55rem);
 }
 
 .desc {
-  font-size: 0.9rem;
-  opacity: 0.9;
+  font-size: 0.92rem;
+  color: rgba(255, 255, 255, 0.88);
   margin-bottom: 1.2rem;
 }
 
 .prize-breakdown div {
   display: flex;
   justify-content: space-between;
-  padding: 0.5rem 0;
-  border-bottom: 1px solid rgba(255, 255, 255, 0.15);
-  font-size: 0.92rem;
+  padding: 0.6rem 0;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.16);
+  font-size: 0.95rem;
+}
+
+.prize-breakdown div:last-child {
+  border-bottom: none;
 }
 
 .ticket-plans {
   display: flex;
   justify-content: center;
-  gap: 2rem;
-  margin-bottom: 3rem;
+  gap: 1.8rem;
+  margin-bottom: 3.2rem;
   flex-wrap: wrap;
 }
 
 .plan {
   background: var(--color-bg-light);
   border: 1px solid var(--color-border);
-  padding: 2.2rem 3rem;
-  border-radius: var(--radius);
+  padding: 2.25rem 3rem;
+  border-radius: var(--radius-lg);
   text-align: center;
   position: relative;
-  min-width: 260px;
+  min-width: 265px;
+  transition: transform 0.25s ease, box-shadow 0.25s ease, border-color 0.25s ease;
+}
+
+.plan:hover {
+  transform: translateY(-4px);
+  box-shadow: var(--shadow);
 }
 
 .plan.featured {
+  background: #ffffff;
   border: 2px solid var(--color-secondary);
   box-shadow: var(--shadow);
 }
 
-.plan .price {
-  font-size: 2rem;
-  font-weight: 700;
+.plan h4 {
   color: var(--color-primary);
-  margin: 0.6rem 0;
+  font-size: 1.15rem;
+}
+
+.plan .price {
+  font-family: var(--font-display);
+  font-size: 2.15rem;
+  font-weight: 800;
+  color: var(--color-primary);
+  margin: 0.65rem 0;
 }
 
 .plan .price span {
   font-size: 0.95rem;
+  font-weight: 600;
   color: var(--color-muted);
+}
+
+.plan small {
+  color: var(--color-muted);
+  font-weight: 500;
 }
 
 .popular {
   position: absolute;
-  top: -12px;
+  top: -13px;
   left: 50%;
   transform: translateX(-50%);
-  background: var(--color-secondary);
+  background: linear-gradient(135deg var(--in-oklab), var(--color-secondary) 0%, var(--color-secondary-bright) 100%);
   color: #ffffff;
-  font-size: 0.75rem;
-  font-weight: 600;
-  padding: 0.25rem 0.75rem;
-  border-radius: 10px;
+  font-size: 0.76rem;
+  font-weight: 700;
+  padding: 0.28rem 0.85rem;
+  border-radius: 999px;
+  box-shadow: 0 4px 12px rgba(31, 122, 99, 0.35);
 }
 
 .dates-container {
   text-align: center;
+  background: var(--color-bg-light);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-lg);
+  padding: 1.8rem 1.4rem;
 }
 
 .dates-container h4 {
   margin-bottom: 1.2rem;
   color: var(--color-primary);
+  font-size: 1.1rem;
 }
 
 .calendar-chips {
   display: flex;
   flex-wrap: wrap;
   justify-content: center;
-  gap: 0.6rem;
+  gap: 0.65rem;
 }
 
 .chip {
-  background-color: var(--color-bg-light);
+  background-color: #ffffff;
   border: 1px solid var(--color-border);
-  padding: 0.45rem 0.9rem;
-  border-radius: 20px;
-  font-size: 0.85rem;
+  padding: 0.48rem 0.95rem;
+  border-radius: 999px;
+  font-size: 0.86rem;
+  font-weight: 600;
   color: var(--color-primary);
+  transition: border-color 0.2s ease, transform 0.2s ease;
+}
+
+.chip:hover {
+  border-color: var(--color-secondary);
+  transform: translateY(-2px);
+}
+
+.chip-grand {
+  background: linear-gradient(135deg var(--in-oklab), var(--color-primary) 0%, #153854 100%);
+  color: #ffffff;
+  border-color: transparent;
 }
 
 @media (max-width: 768px) {

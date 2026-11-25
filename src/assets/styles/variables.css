@@ -1,57 +1,175 @@
 :root {
-  /* Paleta Emerald Green */
-  --color-primary: #081C2D;      /* Navy Blue */
-  --color-secondary: #1F7A63;    /* Emerald Green */
-  --color-bg-light: #F5F7FA;     /* Soft White */
-  --color-muted: #9AA3A8;        /* Cool Gray */
+  /* Paleta Ahorro Luxury (Navy + Emerald + Gold Accent) */
+  --color-primary: #081C2D;
+  --color-primary-soft: #102D46;
+  --color-secondary: #1F7A63;
+  --color-secondary-bright: #2AA384;
+  --color-accent-gold: #D6A954;
+  --color-bg-light: #F4F7FA;
+  --color-muted: #52606D; /* Contraste >= 6:1 sobre fondo blanco (WCAG AA/AAA) */
 
   /* Auxiliares */
   --color-text-dark: #081C2D;
   --color-text-light: #FFFFFF;
   --color-card-bg: #FFFFFF;
   --color-border: #E2E8F0;
-  --radius: 12px;
-  --shadow: 0 10px 25px -5px rgba(8, 28, 45, 0.08);
+  --radius: 14px;
+  --radius-lg: 20px;
+
+  /* Sombras multicapa para profundidad realista */
+  --shadow:
+    0 1px 2px rgba(8, 28, 45, 0.04),
+    0 8px 20px -6px rgba(8, 28, 45, 0.08),
+    0 18px 34px -14px rgba(8, 28, 45, 0.06);
+  --shadow-hover:
+    0 2px 4px rgba(8, 28, 45, 0.06),
+    0 14px 28px -8px rgba(8, 28, 45, 0.14),
+    0 24px 44px -16px rgba(31, 122, 99, 0.16);
+
+  /* Token progresivo de interpolación de color para gradientes */
+  --in-oklab: ;
+
+  /* Tipografía */
+  --font-display: 'Plus Jakarta Sans', 'Segoe UI', system-ui, -apple-system, sans-serif;
+  --font-body: 'Inter', 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
 }
 
-* {
+@supports (background: linear-gradient(in oklab, white, black)) {
+  :root {
+    --in-oklab: in oklab;
+  }
+}
+
+*,
+*::before,
+*::after {
   box-sizing: border-box;
   margin: 0;
   padding: 0;
-  font-family: 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
 }
 
 html {
   scroll-behavior: smooth;
+  scroll-padding-top: 84px;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+html.lenis,
+html.lenis body {
+  height: auto;
+}
+
+.lenis.lenis-smooth {
+  scroll-behavior: auto !important;
 }
 
 body {
+  font-family: var(--font-body);
   background-color: var(--color-bg-light);
   color: var(--color-text-dark);
+  accent-color: var(--color-secondary);
+  line-height: 1.6;
+  overflow-x: clip;
+}
+
+/* Tipografía equilibrada y legible (modern-web-guidance) */
+h1,
+h2,
+h3,
+h4,
+h5,
+h6 {
+  font-family: var(--font-display);
+  text-wrap: balance;
+  letter-spacing: -0.02em;
+}
+
+p,
+li {
+  text-wrap: pretty;
+}
+
+/* Enfoque accesible con :focus-visible */
+:where(a, button, input, select, textarea):focus-visible {
+  outline: 3px solid var(--color-secondary-bright);
+  outline-offset: 3px;
+}
+
+/* Utilidad accesible para skip-link y textos solo para lectores de pantalla */
+.visually-hidden:where(:not(:focus-within, :active)) {
+  position: absolute !important;
+  clip-path: inset(50%) !important;
+  overflow: hidden !important;
+  width: 1px !important;
+  height: 1px !important;
+  margin: -1px !important;
+  padding: 0 !important;
+  border: 0 !important;
+  white-space: nowrap !important;
+}
+
+.skip-link {
+  position: fixed;
+  top: 0.75rem;
+  left: 0.75rem;
+  z-index: 10000;
+  background: var(--color-primary);
+  color: #ffffff;
+  padding: 0.7rem 1.15rem;
+  border-radius: 10px;
+  font-weight: 700;
+  text-decoration: none;
+  box-shadow: var(--shadow-hover);
 }
 
 .container {
   max-width: 1200px;
   margin: 0 auto;
-  padding: 0 1.5rem;
+  padding: 0 clamp(1.1rem, 3vw, 2rem);
 }
 
 .section-padding {
-  padding: 5rem 0;
+  padding: clamp(3.5rem, 7vw, 6rem) 0;
 }
 
 .section-title {
-  font-size: 2.2rem;
-  font-weight: 700;
+  font-size: clamp(1.75rem, 3.2vw, 2.5rem);
+  font-weight: 800;
   color: var(--color-primary);
   text-align: center;
-  margin-bottom: 0.8rem;
+  margin-bottom: 0.85rem;
+  line-height: 1.18;
 }
 
 .section-subtitle {
   text-align: center;
   color: var(--color-muted);
-  max-width: 650px;
-  margin: 0 auto 3rem auto;
-  font-size: 1.05rem;
+  max-width: 660px;
+  margin: 0 auto clamp(2.2rem, 4.5vw, 3.4rem) auto;
+  font-size: clamp(0.98rem, 1.5vw, 1.08rem);
+  line-height: 1.65;
+}
+
+/* Área táctil mínima cómoda en dispositivos táctiles */
+@media (pointer: coarse) {
+  button,
+  a.btn-primary,
+  a.btn-secondary {
+    min-block-size: 44px;
+  }
+}
+
+/* Respetar preferencia de movimiento reducido */
+@media (prefers-reduced-motion: reduce) {
+  html {
+    scroll-behavior: auto;
+  }
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
 }
