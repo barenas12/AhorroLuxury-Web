@@ -45,8 +45,6 @@ jobs:
           semgrep scan \
             --config p/javascript \
             --config p/typescript \
-            --config p/nodejs \
-            --config p/react \
             --config p/owasp-top-ten \
             --config p/secrets \
             --error

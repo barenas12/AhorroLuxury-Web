@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { ref, computed, onMounted } from 'vue'
-import { buildScopeQuery, type ViewerUser } from '../utils/viewerScope'
+import { type ViewerUser } from '../utils/viewerScope'
+import { apiFetch } from '../utils/apiClient'
 
 const props = defineProps<{
   currentUser?: ViewerUser
@@ -66,8 +67,7 @@ const sortDirection = ref<SortDirection>('desc')
 const loadSavingsData = async () => {
   isLoading.value = true
   try {
-    const qs = buildScopeQuery(props.currentUser)
-    const res = await fetch(`${import.meta.env.VITE_API_URL}/api/savings/dashboard${qs ? `?${qs}` : ''}`)
+    const res = await apiFetch('/api/savings/dashboard')
     const data = await res.json()
     if (data.success) {
       partners.value = data.data

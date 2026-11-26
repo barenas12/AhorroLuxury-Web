@@ -34,15 +34,3 @@ export function isAdminUser(user?: ViewerUser | null): boolean {
 export function isReadOnlyUser(user?: ViewerUser | null): boolean {
   return getUserProfile(user) !== 1
 }
-
-export function buildScopeQuery(user?: ViewerUser | null): string {
-  if (!user) return ''
-  const params = new URLSearchParams()
-  const profile = getUserProfile(user)
-  params.set('viewerProfile', String(profile))
-  if (user.id) params.set('viewerId', String(user.id))
-  if (user.partnerId) params.set('viewerPartnerId', String(user.partnerId))
-  const doc = user.user || user.username
-  if (doc) params.set('viewerDoc', String(doc))
-  return params.toString()
-}

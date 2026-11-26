@@ -1,7 +1,8 @@
 <script setup lang="ts">
 import { ref, computed, onMounted, nextTick, watch } from 'vue'
 import LoanReceipt, { type LoanReceiptData } from './LoanReceipt.vue'
-import { buildScopeQuery, isAdminUser, type ViewerUser } from '../utils/viewerScope'
+import { isAdminUser, type ViewerUser } from '../utils/viewerScope'
+import { apiFetch } from '../utils/apiClient'
 
 export interface LoanRecord {
   id: number
@@ -176,12 +177,11 @@ const equivalentRatePreview = computed(() => {
 const loadData = async () => {
   isLoading.value = true
   try {
-    const qs = buildScopeQuery(props.currentUser)
     const requests: Promise<Response>[] = [
-      fetch(`${import.meta.env.VITE_API_URL}/api/loans${qs ? `?${qs}` : ''}`)
+      apiFetch('/api/loans')
     ]
     if (isAdmin.value) {
-      requests.push(fetch(`${import.meta.env.VITE_API_URL}/api/payments/partners?onlyPartners=1`))
+      requests.push(apiFetch('/api/payments/partners?onlyPartners=1'))
     }
     const [resLoans, resPartners] = await Promise.all(requests)
     if (resLoans) {
@@ -393,31 +393,7 @@ const submitNewLoan = async () => {
   }
   isSaving.value = true
   try {
-    const partner = availablePartners.value.find(p => p.id === newLoanForm.value.partnerId)
-
-    // 1. Crear el egreso (salida de caja) primero
-    const egressPayload = {
-      concept: `Préstamo Entregado - C.C. ${partner?.documentId}`,
-      amount: newLoanForm.value.initialCapital,
-      paymentMethod: newLoanForm.value.deliveryMethod,
-      recipient: partner?.fullName,
-      paymentDate: newLoanForm.value.deliveryDate,
-      observations: `Garantía: ${newLoanForm.value.guarantee}`,
-      registeredBy: props.currentUser.id
-    }
-
-    const egressRes = await fetch(`${import.meta.env.VITE_API_URL}/api/egresses`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(egressPayload)
-    })
-
-    const egressData = await egressRes.json()
-    if (!egressRes.ok || !egressData.success) {
-      throw new Error(egressData.message || 'Error al descontar el dinero de la caja.')
-    }
-
-    // 2. Crear el contrato del préstamo (porcentaje % o valor fijo $ por ciclo)
+    // El backend valida fondos, registra el egreso y crea el préstamo en una sola transacción atómica
     const loanPayload = {
       partnerId: newLoanForm.value.partnerId,
       initialCapital: Number(newLoanForm.value.initialCapital),
@@ -435,17 +411,15 @@ const submitNewLoan = async () => {
       deliveryDate: newLoanForm.value.deliveryDate,
       termDays: Number(newLoanForm.value.termDays || defaultTermDays),
       installments: Number(newLoanForm.value.installments) || 1,
-      observations: newLoanForm.value.observations,
-      registeredBy: props.currentUser.id
+      observations: newLoanForm.value.observations
     }
-    const loanRes = await fetch(`${import.meta.env.VITE_API_URL}/api/loans`, {
+    const loanRes = await apiFetch('/api/loans', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(loanPayload)
     })
 
     const loanData = await loanRes.json()
-    if (!loanRes.ok || !loanData.success) throw new Error(loanData.message)
+    if (!loanRes.ok || !loanData.success) throw new Error(loanData.message || 'Error al registrar el préstamo.')
 
     showCreateModal.value = false
     await loadData()
@@ -490,9 +464,8 @@ const submitEditInterest = async () => {
   modalError.value = ''
   isSaving.value = true
   try {
-    const res = await fetch(`${import.meta.env.VITE_API_URL}/api/loans/${selectedLoan.value.id}/interest`, {
+    const res = await apiFetch(`/api/loans/${selectedLoan.value.id}/interest`, {
       method: 'PATCH',
-      headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         interestMode: editInterestForm.value.interestMode,
         interestRate: Number(editInterestForm.value.interestRate),
@@ -522,7 +495,7 @@ const openReceiptsModal = async (loan: LoanRecord) => {
   showReceiptsModal.value = true
   isLoadingReceipts.value = true
   try {
-    const res = await fetch(`${import.meta.env.VITE_API_URL}/api/loans/${loan.id}/receipts`)
+    const res = await apiFetch(`/api/loans/${loan.id}/receipts`)
     const data = await res.json()
     if (data.success) loanReceipts.value = data.data
   } catch (err) {
@@ -552,11 +525,9 @@ const submitMixedPayment = async () => {
 
   isSaving.value = true
   try {
-    const payload = { ...payForm.value, registeredBy: props.currentUser.id }
-    const res = await fetch(`${import.meta.env.VITE_API_URL}/api/loans/${selectedLoan.value.id}/pay`, {
+    const res = await apiFetch(`/api/loans/${selectedLoan.value.id}/pay`, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(payload)
+      body: JSON.stringify(payForm.value)
     })
     const data = await res.json()
     if (!res.ok || !data.success) throw new Error(data.message)

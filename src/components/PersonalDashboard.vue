@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { ref, computed, onMounted } from 'vue'
-import { buildScopeQuery, getUserProfile, type ViewerUser } from '../utils/viewerScope'
+import { getUserProfile, type ViewerUser } from '../utils/viewerScope'
+import { apiFetch } from '../utils/apiClient'
 
 interface TicketStatusItem {
   number: string
@@ -69,8 +70,7 @@ const myTickets = computed(() => {
 const loadPersonalSummary = async () => {
   isLoading.value = true
   try {
-    const qs = buildScopeQuery(props.currentUser)
-    const res = await fetch(`${import.meta.env.VITE_API_URL}/api/dashboard/personal?${qs}`)
+    const res = await apiFetch('/api/dashboard/personal')
     const json = await res.json()
     if (json.success) {
       data.value = json.data

@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { ref, computed, onMounted, watch } from 'vue'
-import { buildScopeQuery, isAdminUser, type ViewerUser } from '../utils/viewerScope'
+import { isAdminUser, type ViewerUser } from '../utils/viewerScope'
+import { apiFetch } from '../utils/apiClient'
 
 export interface RaffleItem {
   number: string
@@ -71,14 +72,13 @@ const loadRaffleData = async () => {
   isLoading.value = true
   selectedNumber.value = null
   try {
-    const qs = buildScopeQuery(props.currentUser)
     const requests: Promise<Response>[] = [
-      fetch(`${import.meta.env.VITE_API_URL}/api/users/raffle/${props.raffleType}${qs ? `?${qs}` : ''}`)
+      apiFetch(`/api/users/raffle/${props.raffleType}`)
     ]
     if (isAdmin.value) {
       requests.push(
-        fetch(`${import.meta.env.VITE_API_URL}/api/payments/partners?onlyPartners=1`),
-        fetch(`${import.meta.env.VITE_API_URL}/api/users/coordinators`)
+        apiFetch('/api/payments/partners?onlyPartners=1'),
+        apiFetch('/api/users/coordinators')
       )
     }
 
@@ -226,9 +226,8 @@ const submitAssignTicket = async () => {
 
   isAssigning.value = true
   try {
-    const res = await fetch(`${import.meta.env.VITE_API_URL}/api/users/raffle/${props.raffleType}/assign`, {
+    const res = await apiFetch(`/api/users/raffle/${props.raffleType}/assign`, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(assignForm.value)
     })
     const data = await res.json()

@@ -11,7 +11,14 @@ import Dashboard, { type UserSession } from "./components/Dashboard.vue";
 import TheFooter from "./components/TheFooter.vue";
 import ChangePasswordModal from "./components/ChangePasswordModal.vue";
 import SeoHead from "./components/SeoHead.vue";
-import { buildScopeQuery, getUserProfile, type ModuleAvailability } from "./utils/viewerScope";
+import { getUserProfile, type ModuleAvailability } from "./utils/viewerScope";
+import {
+  apiFetch,
+  clearAuthToken,
+  getAuthToken,
+  setAuthToken,
+  setUnauthorizedHandler,
+} from "./utils/apiClient";
 import { useSmoothScroll } from "./composables/useSmoothScroll";
 
 type ViewMode = "home" | "login" | "dashboard";
@@ -27,13 +34,12 @@ const isLandingView = computed(() => currentView.value === "home");
 useSmoothScroll(isLandingView);
 
 const loadModuleAvailability = async (user: UserSession | null): Promise<void> => {
-  if (!user || getUserProfile(user) === 1) {
+  if (!user || getUserProfile(user) === 1 || user.resetPassword === 1) {
     moduleAvailability.value = null;
     return;
   }
   try {
-    const qs = buildScopeQuery(user);
-    const res = await fetch(`${import.meta.env.VITE_API_URL}/api/dashboard/personal?${qs}`);
+    const res = await apiFetch("/api/dashboard/personal");
     const json = await res.json();
     if (json.success && json.data?.availability) {
       moduleAvailability.value = json.data.availability;
@@ -64,15 +70,23 @@ const showToast = (
 // CONTROL DE INACTIVIDAD (30 MINUTOS) Y PERSISTENCIA F5
 // ----------------------------------------------------
 const INACTIVITY_LIMIT_MS = 30 * 60 * 1000; // 30 minutos en milisegundos
-const STORAGE_USER_KEY = "al_user_session";
 const STORAGE_TIME_KEY = "al_last_activity";
 
 let inactivityTimer: ReturnType<typeof setTimeout> | null = null;
 
+const clearSessionState = (): void => {
+  currentUser.value = null;
+  moduleAvailability.value = null;
+  showResetPassModal.value = false;
+  clearAuthToken();
+  sessionStorage.removeItem(STORAGE_TIME_KEY);
+  if (inactivityTimer) clearTimeout(inactivityTimer);
+};
+
 const updateLastActivity = (): void => {
   if (currentUser.value) {
     const now = Date.now();
-    localStorage.setItem(STORAGE_TIME_KEY, now.toString());
+    sessionStorage.setItem(STORAGE_TIME_KEY, now.toString());
     resetInactivityTimer();
   }
 };
@@ -86,29 +100,28 @@ const resetInactivityTimer = (): void => {
 };
 
 // Cierre automático por superar los 30 min
-// Cierre automático por superar los 30 min
 const handleInactivityTimeout = (): void => {
   if (currentUser.value) {
-    currentUser.value = null;
-    localStorage.removeItem(STORAGE_USER_KEY);
-    localStorage.removeItem(STORAGE_TIME_KEY);
-    localStorage.removeItem('token'); // <-- ELIMINAR EL TOKEN JWT
-    if (inactivityTimer) clearTimeout(inactivityTimer);
-
+    clearSessionState();
     currentView.value = "home";
     window.scrollTo({ top: 0, behavior: "smooth" });
     showToast("Cerrada la sesión por inactividad", "info");
   }
 };
 
+// Cierre automático cuando el backend responde 401 (sesión expirada o revocada)
+const handleSessionExpired = (): void => {
+  if (currentUser.value || getAuthToken()) {
+    clearSessionState();
+    currentView.value = "login";
+    window.scrollTo({ top: 0, behavior: "smooth" });
+    showToast("Tu sesión expiró. Inicia sesión nuevamente.", "info");
+  }
+};
+
 // Cierre voluntario desde el botón del Sidebar
 const handleManualLogout = (): void => {
-  currentUser.value = null;
-  localStorage.removeItem(STORAGE_USER_KEY);
-  localStorage.removeItem(STORAGE_TIME_KEY);
-  localStorage.removeItem('token'); // <-- ELIMINAR EL TOKEN JWT
-  if (inactivityTimer) clearTimeout(inactivityTimer);
-
+  clearSessionState();
   currentView.value = "home";
   window.scrollTo({ top: 0, behavior: "smooth" });
   showToast("Cierre de sesión exitoso", "success");
@@ -135,30 +148,46 @@ const detachActivityListeners = (): void => {
   });
 };
 
-// Al montar la app (cuando el usuario entra o da F5)
-onMounted(() => {
+// Al montar la app (cuando el usuario entra o da F5): verificar token contra el servidor
+onMounted(async () => {
   attachActivityListeners();
+  setUnauthorizedHandler(handleSessionExpired);
 
-  const savedUser = localStorage.getItem(STORAGE_USER_KEY);
-  const lastActivity = localStorage.getItem(STORAGE_TIME_KEY);
+  const token = getAuthToken();
+  const lastActivity = sessionStorage.getItem(STORAGE_TIME_KEY);
 
-  if (savedUser && lastActivity) {
-    const timePassed = Date.now() - parseInt(lastActivity, 10);
+  if (!token || !lastActivity) {
+    clearSessionState();
+    return;
+  }
 
-    if (timePassed < INACTIVITY_LIMIT_MS) {
-      currentUser.value = JSON.parse(savedUser);
-      currentView.value = "dashboard";
-      showResetPassModal.value = currentUser.value?.resetPassword === 1;
-      updateLastActivity();
-      loadModuleAvailability(currentUser.value);
-    } else {
-      handleInactivityTimeout();
+  const timePassed = Date.now() - parseInt(lastActivity, 10);
+  if (Number.isNaN(timePassed) || timePassed >= INACTIVITY_LIMIT_MS) {
+    clearSessionState();
+    return;
+  }
+
+  try {
+    const res = await apiFetch("/api/login/me", { skipAuthRedirect: true });
+    const json = await res.json();
+    if (!res.ok || !json.success || !json.data) {
+      clearSessionState();
+      return;
     }
+
+    currentUser.value = json.data;
+    currentView.value = "dashboard";
+    showResetPassModal.value = currentUser.value?.resetPassword === 1;
+    updateLastActivity();
+    await loadModuleAvailability(currentUser.value);
+  } catch {
+    clearSessionState();
   }
 });
 
 onUnmounted(() => {
   detachActivityListeners();
+  setUnauthorizedHandler(null);
   if (inactivityTimer) clearTimeout(inactivityTimer);
   if (toastTimeout) clearTimeout(toastTimeout);
 });
@@ -188,17 +217,17 @@ const showHome = (): void => {
   window.scrollTo({ top: 0, behavior: "smooth" });
 };
 
-const handleLoginSuccess = (user: UserSession): void => {
-  currentUser.value = user;
+const handleLoginSuccess = (payload: { user: UserSession; token: string }): void => {
+  setAuthToken(payload.token);
+  currentUser.value = payload.user;
   currentSection.value = "resumen";
   currentView.value = "dashboard";
-  showResetPassModal.value = user.resetPassword === 1;
+  showResetPassModal.value = payload.user.resetPassword === 1;
 
-  localStorage.setItem(STORAGE_USER_KEY, JSON.stringify(user));
-  localStorage.setItem(STORAGE_TIME_KEY, Date.now().toString());
+  sessionStorage.setItem(STORAGE_TIME_KEY, Date.now().toString());
 
   resetInactivityTimer();
-  loadModuleAvailability(user);
+  loadModuleAvailability(payload.user);
 };
 
 const onPasswordChanged = (): void => {
@@ -206,7 +235,7 @@ const onPasswordChanged = (): void => {
 
   if (currentUser.value) {
     currentUser.value.resetPassword = 0;
-    localStorage.setItem(STORAGE_USER_KEY, JSON.stringify(currentUser.value));
+    loadModuleAvailability(currentUser.value);
   }
 
   currentView.value = "dashboard";

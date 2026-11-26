@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { ref, computed, onMounted } from 'vue'
-import { buildScopeQuery, isAdminUser, type ViewerUser } from '../utils/viewerScope'
+import { isAdminUser, type ViewerUser } from '../utils/viewerScope'
+import { apiFetch } from '../utils/apiClient'
 
 const props = defineProps<{
   currentUser?: ViewerUser
@@ -98,10 +99,9 @@ const parseTickets = (raw: string | string[] | undefined): string[] => {
 const loadData = async (): Promise<void> => {
   isLoading.value = true
   try {
-    const qs = buildScopeQuery(props.currentUser)
     const [resUsers, resCoords] = await Promise.all([
-      fetch(`${import.meta.env.VITE_API_URL}/api/users${qs ? `?${qs}` : ''}`),
-      fetch(`${import.meta.env.VITE_API_URL}/api/users/coordinators`)
+      apiFetch('/api/users'),
+      apiFetch('/api/users/coordinators')
     ])
 
     const dataUsers = await resUsers.json()
@@ -305,14 +305,13 @@ const submitUser = async () => {
 
   isSaving.value = true
   try {
-    const url = isEditing.value
-      ? `${import.meta.env.VITE_API_URL}/api/users/${form.value.id}`
-      : `${import.meta.env.VITE_API_URL}/api/users`
+    const path = isEditing.value
+      ? `/api/users/${form.value.id}`
+      : '/api/users'
     const method = isEditing.value ? 'PUT' : 'POST'
 
-    const res = await fetch(url, {
+    const res = await apiFetch(path, {
       method,
-      headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         ...form.value,
         savingsStartDate: form.value.savingsStartDate || null
@@ -325,6 +324,11 @@ const submitUser = async () => {
     }
 
     showModal.value = false
+    if (!isEditing.value && data.temporaryPassword && form.value.canLogin) {
+      alert(
+        `Usuario creado exitosamente.\n\nContraseña temporal de primer ingreso:\n${data.temporaryPassword}\n\nEntrégala al socio; el sistema le pedirá cambiarla al iniciar sesión.`
+      )
+    }
     await loadData()
   } catch (err: any) {
     modalError.value = err.message
@@ -337,9 +341,8 @@ const submitUser = async () => {
 const toggleStatus = async (user: PartnerUser) => {
   const newStatus = user.partnerStatus === 1 ? 0 : 1
   try {
-    const res = await fetch(`${import.meta.env.VITE_API_URL}/api/users/status`, {
+    const res = await apiFetch('/api/users/status', {
       method: 'PATCH',
-      headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ documentId: user.documentId, status: newStatus })
     })
     const data = await res.json()
@@ -355,16 +358,18 @@ const toggleStatus = async (user: PartnerUser) => {
 
 // Restablecer contraseña
 const resetPassword = async (user: PartnerUser) => {
-  if (!confirm(`¿Restablecer la contraseña de ${user.fullName} a su documento de identidad?`)) return
+  if (!confirm(`¿Generar una nueva contraseña temporal para ${user.fullName}?`)) return
   try {
-    const res = await fetch(`${import.meta.env.VITE_API_URL}/api/users/reset-password`, {
+    const res = await apiFetch('/api/users/reset-password', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ documentId: user.documentId })
     })
     const data = await res.json()
-    if (data.success) {
-      alert(`Contraseña de ${user.fullName} restablecida exitosamente.`)
+    if (res.ok && data.success) {
+      const tempPassText = data.temporaryPassword
+        ? `\n\nNueva contraseña temporal:\n${data.temporaryPassword}\n\nEntrégala al usuario; deberá cambiarla al iniciar sesión.`
+        : ''
+      alert(`Contraseña de ${user.fullName} restablecida exitosamente.${tempPassText}`)
     } else {
       alert(data.message || 'No se pudo restablecer la contraseña.')
     }

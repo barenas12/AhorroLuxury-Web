@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { ref, computed, onMounted, watch } from 'vue'
+import { apiFetch } from '../utils/apiClient'
 
 export interface EgressRecord {
   id: number
@@ -84,8 +85,8 @@ const loadData = async () => {
   try {
     // Cargamos tanto los egresos como los usuarios al mismo tiempo
     const [resEgresses, resUsers] = await Promise.all([
-      fetch(`${import.meta.env.VITE_API_URL}/api/egresses`),
-      fetch(`${import.meta.env.VITE_API_URL}/api/users`)
+      apiFetch('/api/egresses'),
+      apiFetch('/api/users')
     ])
     
     const jsonEgresses = await resEgresses.json()
@@ -136,11 +137,9 @@ const submitEgress = async () => {
   
   isSaving.value = true
   try {
-    const payload = { ...form.value, registeredBy: props.currentUser.id }
-    const res = await fetch(`${import.meta.env.VITE_API_URL}/api/egresses`, {
+    const res = await apiFetch('/api/egresses', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(payload)
+      body: JSON.stringify(form.value)
     })
     
     const data = await res.json()

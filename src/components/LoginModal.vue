@@ -1,10 +1,11 @@
 <script setup lang="ts">
 import { reactive, ref, onMounted, onUnmounted } from 'vue'
 import gsap from 'gsap'
+import { apiFetch } from '../utils/apiClient'
 
 const emit = defineEmits<{
   (e: 'close'): void
-  (e: 'login-success', user: any): void
+  (e: 'login-success', payload: { user: any; token: string }): void
 }>()
 
 const form = reactive({
@@ -52,21 +53,21 @@ const handleSubmit = async (): Promise<void> => {
   errorMessage.value = ''
 
   try {
-    const response = await fetch(`${import.meta.env.VITE_API_URL}/api/login/check-user`, {
+    const response = await apiFetch('/api/login/check-user', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      skipAuthRedirect: true,
       body: JSON.stringify({ user: form.user, password: form.password })
     })
 
     const data = await response.json()
 
-    if (!response.ok || !data.success) {
+    if (!response.ok || !data.success || !data.token) {
       errorMessage.value = data.message || 'Error al iniciar sesión'
       return
     }
 
-    // data.data contiene el usuario de la BD (con su profile: 1, 2, 3)
-    emit('login-success', data.data)
+    // data.data contiene el usuario de la BD y data.token el JWT firmado
+    emit('login-success', { user: data.data, token: data.token })
   } catch (error) {
     errorMessage.value = 'No fue posible conectar con el servidor.'
   } finally {

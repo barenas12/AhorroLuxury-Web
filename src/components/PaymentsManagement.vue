@@ -1,7 +1,8 @@
 <script setup lang="ts">
 import { ref, computed, onMounted, nextTick } from 'vue'
 import ReceiptTicket, { type TicketData } from './ReceiptTicket.vue'
-import { buildScopeQuery, isAdminUser, type ViewerUser } from '../utils/viewerScope'
+import { isAdminUser, type ViewerUser } from '../utils/viewerScope'
+import { apiFetch } from '../utils/apiClient'
 
 export interface ConsolidatedReceiptItem {
   id: number
@@ -171,12 +172,11 @@ const getAvailableTicketsForRow = (currentIndex: number): PayerTicketOption[] =>
 const loadData = async (): Promise<void> => {
   isLoading.value = true
   try {
-    const qs = buildScopeQuery(props.currentUser)
     const requests: Promise<Response>[] = [
-      fetch(`${import.meta.env.VITE_API_URL}/api/payments/consolidated${qs ? `?${qs}` : ''}`)
+      apiFetch('/api/payments/consolidated')
     ]
     if (isAdmin.value) {
-      requests.push(fetch(`${import.meta.env.VITE_API_URL}/api/payments/partners`))
+      requests.push(apiFetch('/api/payments/partners'))
     }
 
     const [resReceipts, resPartners] = await Promise.all(requests)
@@ -519,7 +519,6 @@ const submitPayment = async () => {
     const payload = {
       partnerId: selectedPayer.value.partnerId,
       externalTicketId: selectedPayer.value.externalTicketId,
-      registeredBy: props.currentUser.id,
       markSavingsUpToDate: selectedPayer.value.payerType === 'partner' ? form.value.markSavingsUpToDate : false,
       items: form.value.items.map(it => ({
         concept: it.concept,
@@ -535,9 +534,8 @@ const submitPayment = async () => {
       }))
     }
 
-    const res = await fetch(`${import.meta.env.VITE_API_URL}/api/payments`, {
+    const res = await apiFetch('/api/payments', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(payload)
     })
 

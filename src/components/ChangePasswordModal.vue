@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { ref, computed } from 'vue'
+import { apiFetch, setAuthToken } from '../utils/apiClient'
 
 const props = defineProps<{
   username: string
@@ -59,11 +60,9 @@ const handleSubmit = async () => {
   errorMessage.value = ''
 
   try {
-    const res = await fetch(`${import.meta.env.VITE_API_URL}/api/users/change-password`, {
+    const res = await apiFetch('/api/users/change-password', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
-        username: props.username,
         newPassword: newPassword.value
       })
     })
@@ -71,6 +70,10 @@ const handleSubmit = async () => {
     const data = await res.json()
     if (!res.ok || !data.success) {
       throw new Error(data.message || 'Error al actualizar contraseña')
+    }
+
+    if (data.token) {
+      setAuthToken(data.token)
     }
 
     emit('password-changed')

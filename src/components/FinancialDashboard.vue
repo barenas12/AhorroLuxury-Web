@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { ref, computed, onMounted } from 'vue'
+import { apiFetch } from '../utils/apiClient'
 
 export interface RecaudoItem {
   paymentMethod: string
@@ -29,7 +30,7 @@ const dashboardData = ref<DashboardData>({ recaudo: [], salidas: [], capitalPres
 const loadSummary = async () => {
   isLoading.value = true
   try {
-    const res = await fetch(`${import.meta.env.VITE_API_URL}/api/dashboard/summary`)
+    const res = await apiFetch('/api/dashboard/summary')
     const json = await res.json()
     if (json.success) {
       dashboardData.value = json.data
